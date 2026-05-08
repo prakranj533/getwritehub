@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?   // For credentials provider
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  books         Book[]
+  chapters      Chapter[]
+  reviews       Review[]
+  collaborations Collaborator[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Book {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  slug        String   @unique
+  isPublic    Boolean  @default(false)
+  status      String   @default("draft") // draft, published, archived
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  authorId    String
+
+  author          User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  chapters        Chapter[]
+  collaborators   Collaborator[]
+}
+
+model Collaborator {
+  id        String   @id @default(uuid())
+  bookId    String
+  userId    String
+  role      String   @default("editor") // owner, editor, reviewer
+  createdAt DateTime @default(now())
+
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, userId])
+}
+
+model Chapter {
+  id          String   @id @default(uuid())
+  title       String
+  content     String   @default("")
+  order       Int      @default(0)
+  status      String   @default("draft") // draft, review, published
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  bookId      String
+  authorId    String
+  version     Int      @default(1)
+
+  book     Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reviews  Review[]
+  versions ChapterVersion[]
+}
+
+model ChapterVersion {
+  id        String   @id @default(uuid())
+  chapterId String
+  content   String
+  version   Int
+  createdAt DateTime @default(now())
+  createdBy String
+
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  chapterId   String
+  reviewerId  String
+  status      String   @default("pending") // pending, approved, changes_requested
+  comment     String?
+  lineComments String? // JSON array of {line, comment}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  chapter  Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  reviewer User    @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+}

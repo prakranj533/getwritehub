@@ -1,51 +1,60 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/auth-provider";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Book, Users, GitBranch, Globe, Lock, Plus } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { getBooks, type Book as BookType, getChapters, getCollaborators } from "@/lib/firestore";
 
-interface BookType {
-  id: string;
-  title: string;
-  description: string | null;
-  slug: string;
-  isPublic: boolean;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-  author: {
-    id: string;
-    name: string | null;
-    email: string;
-    image: string | null;
-  };
-  chapters: { id: string }[];
-  collaborators: { id: string }[];
+interface BookWithCounts extends BookType {
+  chapterCount: number;
+  collaboratorCount: number;
 }
 
 export default function Home() {
-  const { data: session } = useSession();
-  const [books, setBooks] = useState<BookType[]>([]);
+  const { user } = useAuth();
+  const [books, setBooks] = useState<BookWithCounts[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"discover" | "my-books">("discover");
 
   useEffect(() => {
     fetchBooks();
-  }, [activeTab, session]);
+  }, [activeTab, user]);
 
   const fetchBooks = async () => {
     try {
       setLoading(true);
-      const url = activeTab === "my-books" && session 
-        ? "/api/books?mine=true" 
-        : "/api/books";
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        setBooks(data);
+      if (!user) {
+        // Only show public books when not logged in
+        if (activeTab === "my-books") {
+          setBooks([]);
+          return;
+        }
       }
+      
+      const userId = user?.id || "";
+      const allBooks = await getBooks(userId);
+      
+      // Filter based on active tab
+      const filteredBooks = activeTab === "my-books" && user
+        ? allBooks.filter(b => b.authorId === userId || b.authorEmail === user.email)
+        : allBooks.filter(b => b.isPublic || b.status === "published");
+      
+      // Fetch chapter and collaborator counts for each book
+      const booksWithCounts = await Promise.all(
+        filteredBooks.map(async (book) => {
+          const chapters = await getChapters(book.id!);
+          const collaborators = await getCollaborators(book.id!);
+          return {
+            ...book,
+            chapterCount: chapters.length,
+            collaboratorCount: collaborators.length,
+          };
+        })
+      );
+      
+      setBooks(booksWithCounts);
     } catch (error) {
       console.error("Error fetching books:", error);
     } finally {
@@ -64,7 +73,7 @@ export default function Home() {
           Connect with multiple people who share the same passion and interest. 
           Co-author, review chapters, and publish your book as one team.
         </p>
-        {!session && (
+        {!user && (
           <div className="mt-8 flex gap-4 justify-center">
             <Link
               href="/auth/signin"
@@ -96,7 +105,7 @@ export default function Home() {
             <Globe className="inline w-4 h-4 mr-2" />
             Discover
           </button>
-          {session && (
+          {user && (
             <button
               onClick={() => setActiveTab("my-books")}
               className={`px-4 py-2 rounded-lg font-medium transition ${
@@ -111,7 +120,7 @@ export default function Home() {
           )}
         </div>
         
-        {session && (
+        {user && (
           <Link
             href="/books/new"
             className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition flex items-center gap-2"
@@ -157,7 +166,7 @@ export default function Home() {
                       {book.title}
                     </h3>
                     <p className="text-sm text-gray-500">
-                      by {book.author.name || book.author.email}
+                      by {book.authorName || book.authorEmail}
                     </p>
                   </div>
                 </div>
@@ -176,14 +185,14 @@ export default function Home() {
                 <div className="flex items-center gap-4">
                   <span className="flex items-center gap-1">
                     <Book className="w-4 h-4" />
-                    {book.chapters.length} chapters
+                    {book.chapterCount} chapters
                   </span>
                   <span className="flex items-center gap-1">
                     <Users className="w-4 h-4" />
-                    {book.collaborators.length + 1}
+                    {book.collaboratorCount + 1}
                   </span>
                 </div>
-                <span>{formatDate(book.updatedAt)}</span>
+                <span>{book.updatedAt ? formatDate(book.updatedAt.toDate?.() || book.updatedAt) : "Just now"}</span>
               </div>
 
               <div className="mt-4 flex items-center gap-2">

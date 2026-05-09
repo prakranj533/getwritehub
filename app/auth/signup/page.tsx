@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
+import { signUp } from "@/lib/firebase-auth";
 
 export default function SignUp() {
   const router = useRouter();
@@ -26,33 +26,20 @@ export default function SignUp() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Failed to create account");
+      await signUp(email, password, name);
+      router.push("/");
+      router.refresh();
+    } catch (err: any) {
+      console.error("Sign up error:", err);
+      if (err.code === "auth/email-already-in-use") {
+        setError("Email already in use. Please sign in instead.");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Invalid email format");
+      } else if (err.code === "auth/weak-password") {
+        setError("Password should be at least 6 characters");
       } else {
-        // Auto sign in after signup
-        const signInResult = await signIn("credentials", {
-          email,
-          password,
-          redirect: false,
-        });
-
-        if (signInResult?.error) {
-          setError("Account created but sign in failed. Please sign in manually.");
-        } else {
-          router.push("/");
-          router.refresh();
-        }
+        setError("An error occurred. Please try again.");
       }
-    } catch (error) {
-      setError("An error occurred. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -63,7 +50,7 @@ export default function SignUp() {
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Create account</h1>
-          <p className="text-gray-600 mt-2">Start writing books on BookHub</p>
+          <p className="text-gray-600 mt-2">Start writing books on WriteHub</p>
         </div>
 
         {error && (

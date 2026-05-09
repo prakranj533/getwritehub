@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn } from "@/lib/firebase-auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -18,20 +18,20 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
+      await signIn(email, password);
+      router.push("/");
+      router.refresh();
+    } catch (err: any) {
+      console.error("Sign in error:", err);
+      if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
         setError("Invalid email or password");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Invalid email format");
+      } else if (err.code === "auth/too-many-requests") {
+        setError("Too many failed attempts. Please try again later.");
       } else {
-        router.push("/");
-        router.refresh();
+        setError("An error occurred. Please try again.");
       }
-    } catch (error) {
-      setError("An error occurred. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -42,7 +42,7 @@ export default function SignIn() {
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
-          <p className="text-gray-600 mt-2">Sign in to your BookHub account</p>
+          <p className="text-gray-600 mt-2">Sign in to your WriteHub account</p>
         </div>
 
         {error && (

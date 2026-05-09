@@ -1,39 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Book, Globe, Lock } from "lucide-react";
+import { useAuth } from "@/components/auth-provider";
+import { createBook } from "@/lib/firestore";
 
 export default function NewBook() {
   const router = useRouter();
+  const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (!user && !loading) {
+      router.push("/auth/signin");
+    }
+  }, [user, router, loading]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
+    if (!user) {
+      setError("You must be signed in to create a book");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await fetch("/api/books", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, isPublic }),
+      const slug = title.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+
+      const book = await createBook({
+        title,
+        description: description || "",
+        slug,
+        isPublic,
+        status: "draft",
+        authorId: user.id,
+        authorEmail: user.email || "",
+        authorName: user.name || user.email || "Anonymous",
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Failed to create book");
-      } else {
-        router.push(`/books/${data.id}`);
-      }
-    } catch (error) {
-      setError("An error occurred. Please try again.");
+      router.push(`/books/${book.id}`);
+    } catch (err: any) {
+      console.error("Error creating book:", err);
+      setError(err.message || "An error occurred. Please try again.");
     } finally {
       setLoading(false);
     }

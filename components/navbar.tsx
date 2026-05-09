@@ -1,11 +1,19 @@
 "use client";
 
-import { useSession, signIn, signOut } from "next-auth/react";
+import { useAuth } from "@/components/auth-provider";
+import { logOut } from "@/lib/firebase-auth";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Book, User, LogOut, Plus } from "lucide-react";
 
 export function Navbar() {
-  const { data: session, status } = useSession();
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    await logOut();
+    router.push("/auth/signin");
+  };
 
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -21,9 +29,9 @@ export function Navbar() {
 
           {/* Navigation */}
           <div className="flex items-center gap-4">
-            {status === "loading" ? (
+            {loading ? (
               <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
-            ) : session ? (
+            ) : user ? (
               <>
                 <Link
                   href="/books/new"
@@ -36,23 +44,21 @@ export function Navbar() {
                 <div className="flex items-center gap-3">
                   <div className="text-right hidden sm:block">
                     <p className="text-sm font-medium text-gray-900">
-                      {session.user?.name || session.user?.email}
+                      {user.name || user.email}
                     </p>
                   </div>
 
                   <div className="relative group">
                     <button className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition">
-                      {session.user?.image ? (
+                      {user.image ? (
                         <img
-                          src={session.user.image}
+                          src={user.image}
                           alt="Profile"
                           className="w-8 h-8 rounded-full"
                         />
                       ) : (
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-medium">
-                          {session.user?.name?.[0] ||
-                            session.user?.email?.[0] ||
-                            "U"}
+                          {user.name?.[0] || user.email?.[0] || "U"}
                         </div>
                       )}
                     </button>
@@ -67,7 +73,7 @@ export function Navbar() {
                         Profile
                       </Link>
                       <button
-                        onClick={() => signOut()}
+                        onClick={handleSignOut}
                         className="w-full flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50"
                       >
                         <LogOut className="w-4 h-4" />
@@ -79,12 +85,12 @@ export function Navbar() {
               </>
             ) : (
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => signIn()}
+                <Link
+                  href="/auth/signin"
                   className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
                 >
                   Sign In
-                </button>
+                </Link>
                 <Link
                   href="/auth/signup"
                   className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition"

@@ -80,7 +80,7 @@ export async function getUnsyncedDrafts(): Promise<OfflineDraft[]> {
     const tx = db.transaction(STORE_NAME, "readonly");
     const store = tx.objectStore(STORE_NAME);
     const index = store.index("synced");
-    const request = index.getAll(false);
+    const request = index.getAll(false as unknown as IDBValidKey);
     request.onsuccess = () => resolve(request.result || []);
     request.onerror = () => reject(request.error);
   });

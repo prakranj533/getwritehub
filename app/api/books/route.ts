@@ -1,135 +1,71 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { generateSlug } from "@/lib/utils";
-import { getServerSession } from "next-auth/next";
+import { NextResponse } from 'next/server';
+import { adminDb } from '@/lib/firebase-admin';
+import { verifyAuth, unauthorizedResponse } from '@/lib/api-auth';
+import * as admin from 'firebase-admin';
 
-// GET /api/books - List all books (public) or user's books
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession();
     const { searchParams } = new URL(request.url);
-    const mine = searchParams.get("mine");
+    const mine = searchParams.get('mine') === 'true';
+    const user = await verifyAuth(request);
 
-    if (mine && session?.user?.email) {
-      // Get user's books (both owned and collaborated on)
-      const user = await prisma.user.findUnique({
-        where: { email: session.user.email },
-      });
+    let query: admin.firestore.Query = adminDb.collection('books');
 
-      if (!user) {
-        return NextResponse.json({ error: "User not found" }, { status: 404 });
-      }
-
-      const books = await prisma.book.findMany({
-        where: {
-          OR: [
-            { authorId: user.id },
-            {
-              collaborators: {
-                some: { userId: user.id },
-              },
-            },
-          ],
-        },
-        include: {
-          author: {
-            select: { id: true, name: true, email: true, image: true },
-          },
-          chapters: {
-            select: { id: true },
-          },
-          collaborators: {
-            include: {
-              user: {
-                select: { id: true, name: true, email: true, image: true },
-              },
-            },
-          },
-        },
-        orderBy: { updatedAt: "desc" },
-      });
-
-      return NextResponse.json(books);
+    if (mine) {
+      if (!user) return unauthorizedResponse();
+      // Filter by authorId or authorEmail (to be safe)
+      query = query.where('authorId', '==', user.uid);
+    } else {
+      // Public books
+      query = query.where('isPublic', '==', true).where('status', '==', 'published');
     }
 
-    // Get all public books
-    const books = await prisma.book.findMany({
-      where: { isPublic: true, status: "published" },
-      include: {
-        author: {
-          select: { id: true, name: true, email: true, image: true },
-        },
-        chapters: {
-          select: { id: true },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    });
+    const snapshot = await query.orderBy('updatedAt', 'desc').get();
+    const books = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
 
     return NextResponse.json(books);
   } catch (error) {
-    console.error("Error fetching books:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch books" },
-      { status: 500 }
-    );
+    console.error('Error fetching books:', error);
+    return NextResponse.json({ error: 'Failed to fetch books' }, { status: 500 });
   }
 }
 
-// POST /api/books - Create a new book
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession();
-
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+    const user = await verifyAuth(request);
+    if (!user) return unauthorizedResponse();
 
     const { title, description, isPublic } = await request.json();
 
     if (!title) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 });
+      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
-    let slug = generateSlug(title);
-    let counter = 1;
-    let finalSlug = slug;
+    const slug = title.toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
 
-    // Ensure unique slug
-    while (await prisma.book.findUnique({ where: { slug: finalSlug } })) {
-      finalSlug = `${slug}-${counter}`;
-      counter++;
-    }
+    const bookData = {
+      title,
+      description: description || '',
+      slug,
+      isPublic: isPublic || false,
+      status: 'draft',
+      authorId: user.uid,
+      authorEmail: user.email || '',
+      authorName: user.name || user.email || 'Unknown',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
 
-    const book = await prisma.book.create({
-      data: {
-        title,
-        description,
-        slug: finalSlug,
-        isPublic: isPublic || false,
-        authorId: user.id,
-      },
-      include: {
-        author: {
-          select: { id: true, name: true, email: true, image: true },
-        },
-      },
-    });
-
-    return NextResponse.json(book, { status: 201 });
+    const docRef = await adminDb.collection('books').add(bookData);
+    
+    return NextResponse.json({ id: docRef.id, ...bookData }, { status: 201 });
   } catch (error) {
-    console.error("Error creating book:", error);
-    return NextResponse.json(
-      { error: "Failed to create book" },
-      { status: 500 }
-    );
+    console.error('Error creating book:', error);
+    return NextResponse.json({ error: 'Failed to create book' }, { status: 500 });
   }
 }

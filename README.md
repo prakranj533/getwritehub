@@ -25,10 +25,10 @@ A GitHub-like platform for collaborative book writing. Create books, invite co-a
 npm install
 ```
 
-2. Set up the database:
-```bash
-npx prisma migrate dev
-```
+2. Set up Firebase:
+   - Create a project in the [Firebase Console](https://console.firebase.google.com/)
+   - Enable Firestore Database and Firebase Authentication (Email/Password)
+   - Copy your Firebase config to `.env.local` (see `.env.local.example`)
 
 3. Start the development server:
 ```bash
@@ -57,13 +57,13 @@ Create an account through the signup page to get started.
 2. Click "Add Chapter" button
 3. Enter the chapter title
 4. Write your content in the editor
-5. Save your work with the "Save" button
+5. Save your work with the "Submit to Branch" button
 
-### Version Control
+### Version Control & Offline Writing
 
-- Every time you save a chapter with changes, a new version is created
-- View version history in the sidebar
-- Click "Restore" on any previous version to roll back changes
+- **Offline Support**: Write even without an internet connection. Changes are auto-saved locally.
+- **Submit to Branch**: When online, push your local changes to the main book branch.
+- **Version History**: Every submission creates a new version - restore any previous version from the sidebar.
 
 ### Submitting for Review
 
@@ -101,30 +101,20 @@ Once all reviews are approved:
 ## Architecture
 
 - **Frontend**: Next.js 14 with TypeScript, Tailwind CSS
-- **Backend**: Next.js API Routes
-- **Database**: SQLite with Prisma ORM
-- **Authentication**: NextAuth.js with credentials provider
+- **Backend**: Firebase / Firestore (Serverless)
+- **Database**: Google Firestore
+- **Authentication**: Firebase Authentication
+- **Offline Storage**: IndexedDB / LocalStorage for drafts
 - **UI Components**: Custom components with Lucide icons
 
 ## Data Model
 
-- **User**: Authors and collaborators
-- **Book**: Container for chapters with visibility settings
-- **Chapter**: Individual sections with version history
-- **Review**: Feedback on chapters with approve/request changes status
-- **Collaborator**: Many-to-many relationship between users and books
-- **ChapterVersion**: Historical snapshots of chapter content
-
-## API Routes
-
-- `POST /api/auth/signup` - Create account
-- `POST /api/auth/[...nextauth]` - Sign in/out
-- `GET/POST /api/books` - List/create books
-- `GET/PUT/DELETE /api/books/[id]` - Book operations
-- `GET/POST /api/books/[id]/chapters` - List/create chapters
-- `GET/PUT/DELETE /api/books/[id]/chapters/[chapterId]` - Chapter operations
-- `GET/POST /api/books/[id]/chapters/[chapterId]/reviews` - Reviews
-- `GET/POST/DELETE /api/books/[id]/collaborators` - Manage collaborators
+- **User**: Authors and collaborators (Firebase Auth)
+- **Book**: Container for chapters with visibility settings (Firestore)
+- **Chapter**: Individual sections with content and status (Firestore)
+- **Review**: Feedback on chapters (Firestore)
+- **Collaborator**: Relationship between users and books (Firestore)
+- **ChapterVersion**: Historical snapshots of chapter content (Firestore)
 
 ## License
 

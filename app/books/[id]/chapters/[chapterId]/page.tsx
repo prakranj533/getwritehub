@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/auth-provider";
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -35,56 +35,34 @@ import {
 } from "@/lib/offline-storage";
 import { useOnlineStatus } from "@/components/offline-indicator";
 import { RichEditor } from "@/components/rich-editor";
+import {
+  getChapter,
+  getReviews,
+  getChapterVersions,
+  updateChapter,
+  createReview,
+  createChapterVersion,
+  type Chapter,
+  type Review,
+  type ChapterVersion
+} from "@/lib/firestore";
+import { reviewContent } from "@/lib/ai-review";
 
-interface ReviewType {
-  id: string;
-  status: string;
-  comment: string | null;
-  lineComments: string | null;
-  createdAt: string;
-  reviewer: {
-    id: string;
-    name: string | null;
-    email: string;
-    image: string | null;
-  };
+interface FullChapter extends Chapter {
+  reviews: Review[];
+  versions: ChapterVersion[];
 }
 
-interface VersionType {
-  id: string;
-  version: number;
-  createdAt: string;
-  content: string;
-}
-
-interface ChapterType {
-  id: string;
-  title: string;
-  content: string;
-  status: string;
-  order: number;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-  author: {
-    id: string;
-    name: string | null;
-    email: string;
-    image: string | null;
-  };
-  reviews: ReviewType[];
-  versions: VersionType[];
-}
 
 export default function ChapterPage({
   params,
 }: {
   params: { id: string; chapterId: string };
 }) {
-  const { data: session } = useSession();
+  const { user } = useAuth();
   const router = useRouter();
   const isOnline = useOnlineStatus();
-  const [chapter, setChapter] = useState<ChapterType | null>(null);
+  const [chapter, setChapter] = useState<FullChapter | null>(null);
   const [content, setContent] = useState("");
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(true);
@@ -117,7 +95,6 @@ export default function ChapterPage({
     };
   }, [content, title]);
 
-  // Load offline draft on mount
   useEffect(() => {
     loadOfflineDraft();
   }, [params.chapterId]);
@@ -127,8 +104,7 @@ export default function ChapterPage({
       const draft = await getDraftOffline(params.chapterId);
       if (draft && !draft.synced) {
         setHasUnsyncedChanges(true);
-        // If offline draft is newer, use it
-        if (chapter && new Date(draft.lastSaved) > new Date(chapter.updatedAt)) {
+        if (chapter && new Date(draft.lastSaved) > new Date(chapter.updatedAt?.toMillis?.() || 0)) {
           setContent(draft.content);
           setTitle(draft.title);
           if (draft.aiSuggestions) {
@@ -161,7 +137,6 @@ export default function ChapterPage({
       setLastLocalSave(new Date());
       setTimeout(() => setOfflineSaved(false), 2000);
     } catch (e) {
-      // IndexedDB not available, use localStorage fallback
       try {
         localStorage.setItem(
           `draft-${params.chapterId}`,
@@ -177,9 +152,8 @@ export default function ChapterPage({
     }
   };
 
-  const fetchChapter = useCallback(async () => {
+  const fetchChapterData = useCallback(async () => {
     if (!isOnline) {
-      // Try loading from offline storage
       try {
         const draft = await getDraftOffline(params.chapterId);
         if (draft) {
@@ -193,43 +167,44 @@ export default function ChapterPage({
           }
           return;
         }
-      } catch (e) {
-        // Fall through
-      }
+      } catch (e) {}
       setError("You are offline. Content will load when you reconnect.");
       setLoading(false);
       return;
     }
 
     try {
-      const res = await fetch(
-        `/api/books/${params.id}/chapters/${params.chapterId}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setChapter(data);
-
-        // Check if offline draft is newer
-        const draft = await getDraftOffline(params.chapterId).catch(() => null);
-        if (draft && !draft.synced && draft.lastSaved > new Date(data.updatedAt).getTime()) {
-          setContent(draft.content);
-          setTitle(draft.title);
-          setHasUnsyncedChanges(true);
-          if (draft.aiSuggestions) {
-            setAiSuggestions(draft.aiSuggestions);
-            setAiReviewed(draft.aiReviewed);
-          }
-        } else {
-          setContent(data.content);
-          setTitle(data.title);
-        }
-      } else if (res.status === 403) {
-        setError("You don't have permission to view this chapter");
-      } else {
+      const ch = await getChapter(params.chapterId);
+      if (!ch) {
         setError("Chapter not found");
+        setLoading(false);
+        return;
+      }
+      if (ch.bookId !== params.id) {
+        setError("Chapter not found in this book");
+        setLoading(false);
+        return;
+      }
+
+      const revs = await getReviews(params.chapterId);
+      const vers = await getChapterVersions(params.chapterId);
+
+      setChapter({ ...ch, reviews: revs, versions: vers });
+
+      const draft = await getDraftOffline(params.chapterId).catch(() => null);
+      if (draft && !draft.synced && draft.lastSaved > (ch.updatedAt?.toMillis?.() || 0)) {
+        setContent(draft.content);
+        setTitle(draft.title);
+        setHasUnsyncedChanges(true);
+        if (draft.aiSuggestions) {
+          setAiSuggestions(draft.aiSuggestions);
+          setAiReviewed(draft.aiReviewed);
+        }
+      } else {
+        setContent(ch.content);
+        setTitle(ch.title);
       }
     } catch (error) {
-      // Network error - try offline
       try {
         const draft = await getDraftOffline(params.chapterId);
         if (draft) {
@@ -248,44 +223,29 @@ export default function ChapterPage({
   }, [params.id, params.chapterId, isOnline]);
 
   useEffect(() => {
-    fetchChapter();
-  }, [fetchChapter]);
+    fetchChapterData();
+  }, [fetchChapterData]);
 
-  // Run AI Review
   const runAIReview = async () => {
-    if (!isOnline) {
-      alert("AI Review requires an internet connection. Please go online and try again.");
-      return;
-    }
-
     setAiLoading(true);
     try {
-      const res = await fetch("/api/ai-review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, title }),
-      });
+      const suggestions = reviewContent(content);
+      setAiSuggestions(suggestions);
+      setAiReviewed(true);
+      setShowAIPanel(true);
 
-      if (res.ok) {
-        const data = await res.json();
-        setAiSuggestions(data.suggestions);
-        setAiReviewed(true);
-        setShowAIPanel(true);
-
-        // Save AI review results locally
-        const draft: OfflineDraft = {
-          id: params.chapterId,
-          bookId: params.id,
-          chapterId: params.chapterId,
-          title,
-          content,
-          lastSaved: Date.now(),
-          synced: false,
-          aiReviewed: true,
-          aiSuggestions: data.suggestions,
-        };
-        await saveDraftOffline(draft).catch(() => {});
-      }
+      const draft: OfflineDraft = {
+        id: params.chapterId,
+        bookId: params.id,
+        chapterId: params.chapterId,
+        title,
+        content,
+        lastSaved: Date.now(),
+        synced: false,
+        aiReviewed: true,
+        aiSuggestions: suggestions,
+      };
+      await saveDraftOffline(draft).catch(() => {});
     } catch (error) {
       console.error("AI Review failed:", error);
       alert("AI Review failed. Please try again.");
@@ -294,31 +254,25 @@ export default function ChapterPage({
     }
   };
 
-  // Submit to Branch (push local changes to server)
   const submitToBranch = async () => {
     if (!isOnline) {
       alert("You need to be online to submit to the book branch. Save locally and submit when connected.");
       return;
     }
+    if (!chapter || !user) return;
 
     setSaving(true);
     try {
-      const res = await fetch(
-        `/api/books/${params.id}/chapters/${params.chapterId}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, content }),
-        }
-      );
-
-      if (res.ok) {
-        const data = await res.json();
-        setChapter(data);
-        setHasUnsyncedChanges(false);
-        // Mark as synced in offline storage
-        await markDraftSynced(params.chapterId).catch(() => {});
-      }
+      // Update the chapter with new content
+      // Note: server API increments version automatically if content changes
+      await updateChapter(params.chapterId, { 
+        title, 
+        content,
+      });
+      
+      setHasUnsyncedChanges(false);
+      await markDraftSynced(params.chapterId).catch(() => {});
+      fetchChapterData();
     } catch (error) {
       console.error("Error submitting to branch:", error);
       alert("Failed to submit. Your changes are saved locally. Try again when connection is stable.");
@@ -329,7 +283,6 @@ export default function ChapterPage({
 
   const saveChapter = async () => {
     if (!isOnline) {
-      // Save locally when offline
       await saveLocally();
       return;
     }
@@ -342,18 +295,8 @@ export default function ChapterPage({
       return;
     }
     try {
-      const res = await fetch(
-        `/api/books/${params.id}/chapters/${params.chapterId}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "review" }),
-        }
-      );
-
-      if (res.ok) {
-        fetchChapter();
-      }
+      await updateChapter(params.chapterId, { status: "review" });
+      fetchChapterData();
     } catch (error) {
       console.error("Error submitting for review:", error);
     }
@@ -361,18 +304,8 @@ export default function ChapterPage({
 
   const publishChapter = async () => {
     try {
-      const res = await fetch(
-        `/api/books/${params.id}/chapters/${params.chapterId}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "published" }),
-        }
-      );
-
-      if (res.ok) {
-        fetchChapter();
-      }
+      await updateChapter(params.chapterId, { status: "published" });
+      fetchChapterData();
     } catch (error) {
       console.error("Error publishing chapter:", error);
     }
@@ -380,24 +313,19 @@ export default function ChapterPage({
 
   const submitReview = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     try {
-      const res = await fetch(
-        `/api/books/${params.id}/chapters/${params.chapterId}/reviews`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            status: reviewStatus,
-            comment: reviewComment,
-          }),
-        }
-      );
-
-      if (res.ok) {
-        setReviewComment("");
-        setShowReviewForm(false);
-        fetchChapter();
-      }
+      await createReview({
+        chapterId: params.chapterId,
+        reviewerId: user.id,
+        reviewerEmail: user.email || "",
+        reviewerName: user.name || user.email || "Anonymous",
+        status: reviewStatus,
+        comment: reviewComment,
+      });
+      setReviewComment("");
+      setShowReviewForm(false);
+      fetchChapterData();
     } catch (error) {
       console.error("Error submitting review:", error);
     }
@@ -405,20 +333,10 @@ export default function ChapterPage({
 
   const restoreVersion = async (versionContent: string) => {
     if (!confirm("Restore this version? Current content will be saved as a new version.")) return;
-    
+    if (!chapter || !user) return;
     try {
-      const res = await fetch(
-        `/api/books/${params.id}/chapters/${params.chapterId}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: versionContent }),
-        }
-      );
-
-      if (res.ok) {
-        fetchChapter();
-      }
+      await updateChapter(params.chapterId, { content: versionContent });
+      fetchChapterData();
     } catch (error) {
       console.error("Error restoring version:", error);
     }
@@ -447,7 +365,7 @@ export default function ChapterPage({
   }
 
   const hasReviewed = chapter?.reviews?.some(
-    (r) => r.reviewer.email === session?.user?.email
+    (r) => r.reviewerEmail === user?.email
   ) || false;
   const allReviewsApproved = chapter?.reviews?.every((r) => r.status === "approved") || false;
   const hasReviews = (chapter?.reviews?.length || 0) > 0;
@@ -467,7 +385,6 @@ export default function ChapterPage({
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Online/Offline Indicator */}
           <div
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
               isOnline ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"
@@ -477,7 +394,6 @@ export default function ChapterPage({
             {isOnline ? "Online" : "Offline"}
           </div>
 
-          {/* Offline save indicator */}
           {offlineSaved && (
             <div className="flex items-center gap-1 text-xs text-green-600">
               <HardDrive className="w-3 h-3" />
@@ -485,7 +401,6 @@ export default function ChapterPage({
             </div>
           )}
 
-          {/* Unsynced changes indicator */}
           {hasUnsyncedChanges && (
             <div className="flex items-center gap-1 text-xs text-orange-600">
               <AlertCircle className="w-3 h-3" />
@@ -507,7 +422,7 @@ export default function ChapterPage({
                 {chapter.status}
               </span>
               <span className="text-sm text-gray-500">
-                v{chapter.version} • Updated {formatRelativeTime(chapter.updatedAt)}
+                v{chapter.version} • Updated {chapter.updatedAt ? formatRelativeTime(chapter.updatedAt.toDate?.() || chapter.updatedAt) : "Just now"}
               </span>
             </>
           )}
@@ -540,7 +455,6 @@ export default function ChapterPage({
               )}
             </div>
             <div className="flex gap-2 flex-wrap">
-              {/* Save locally button */}
               <button
                 onClick={saveLocally}
                 className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition flex items-center gap-2 text-sm"
@@ -549,7 +463,6 @@ export default function ChapterPage({
                 Save Local
               </button>
 
-              {/* AI Review button */}
               <button
                 onClick={runAIReview}
                 disabled={aiLoading || !isOnline}
@@ -560,7 +473,6 @@ export default function ChapterPage({
                 {aiLoading ? "Reviewing..." : "AI Review"}
               </button>
 
-              {/* Submit to Branch button */}
               <button
                 onClick={submitToBranch}
                 disabled={saving || !isOnline || !hasUnsyncedChanges}
@@ -734,20 +646,11 @@ export default function ChapterPage({
                         }}
                       >
                         <div className="flex items-center gap-2">
-                          {review.reviewer.image ? (
-                            <img
-                              src={review.reviewer.image}
-                              alt=""
-                              className="w-6 h-6 rounded-full"
-                            />
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">
-                              {review.reviewer.name?.[0] ||
-                                review.reviewer.email[0]}
-                            </div>
-                          )}
+                          <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">
+                            {review.reviewerName?.[0] || review.reviewerEmail[0]}
+                          </div>
                           <span className="text-sm font-medium">
-                            {review.reviewer.name || review.reviewer.email}
+                            {review.reviewerName || review.reviewerEmail}
                           </span>
                           {review.status === "approved" ? (
                             <CheckCircle className="w-4 h-4 text-green-500" />
@@ -761,7 +664,7 @@ export default function ChapterPage({
                           </p>
                         )}
                         <p className="text-xs text-gray-400 mt-1">
-                          {formatRelativeTime(review.createdAt)}
+                          {review.createdAt ? formatRelativeTime(review.createdAt.toDate?.() || review.createdAt) : "Just now"}
                         </p>
                       </div>
                     ))}
@@ -876,7 +779,7 @@ export default function ChapterPage({
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-500">
-                            {formatRelativeTime(version.createdAt)}
+                            {version.createdAt ? formatRelativeTime(version.createdAt.toDate?.() || version.createdAt) : "Just now"}
                           </span>
                           <button
                             onClick={() => restoreVersion(version.content)}
@@ -902,7 +805,7 @@ export default function ChapterPage({
               <div>
                 <p className="text-sm text-gray-500">Written by</p>
                 <p className="font-medium">
-                  {chapter.author.name || chapter.author.email}
+                  {chapter.authorName || chapter.authorEmail}
                 </p>
               </div>
             </div>

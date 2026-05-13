@@ -1,26 +1,15 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/auth-provider";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Trash2, Globe, Lock, Book, AlertTriangle } from "lucide-react";
+import { getBook, updateBook, deleteBook, type Book as BookType } from "@/lib/firestore";
 
-interface BookType {
-  id: string;
-  title: string;
-  description: string | null;
-  slug: string;
-  isPublic: boolean;
-  status: string;
-  author: {
-    id: string;
-    email: string;
-  };
-}
 
 export default function BookSettings({ params }: { params: { id: string } }) {
-  const { data: session } = useSession();
+  const { user } = useAuth();
   const router = useRouter();
   const [book, setBook] = useState<BookType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,14 +19,13 @@ export default function BookSettings({ params }: { params: { id: string } }) {
   const [isPublic, setIsPublic] = useState(false);
 
   useEffect(() => {
-    fetchBook();
+    fetchBookData();
   }, [params.id]);
 
-  const fetchBook = async () => {
+  const fetchBookData = async () => {
     try {
-      const res = await fetch(`/api/books/${params.id}`);
-      if (res.ok) {
-        const data = await res.json();
+      const data = await getBook(params.id);
+      if (data) {
         setBook(data);
         setTitle(data.title);
         setDescription(data.description || "");
@@ -54,35 +42,24 @@ export default function BookSettings({ params }: { params: { id: string } }) {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch(`/api/books/${params.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, isPublic }),
-      });
-
-      if (res.ok) {
-        alert("Settings saved successfully");
-      }
+      await updateBook(params.id, { title, description, isPublic });
+      alert("Settings saved successfully");
     } catch (error) {
       console.error("Error saving settings:", error);
+      alert("Failed to save settings");
     } finally {
       setSaving(false);
     }
   };
 
-  const deleteBook = async () => {
+  const handleDeleteBook = async () => {
     if (!confirm("Are you sure you want to delete this book? This action cannot be undone.")) {
       return;
     }
 
     try {
-      const res = await fetch(`/api/books/${params.id}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        router.push("/");
-      }
+      await deleteBook(params.id);
+      router.push("/");
     } catch (error) {
       console.error("Error deleting book:", error);
     }
@@ -104,7 +81,7 @@ export default function BookSettings({ params }: { params: { id: string } }) {
     );
   }
 
-  const isAuthor = session?.user?.email === book.author.email;
+  const isAuthor = user?.email === book.authorEmail || user?.id === book.authorId;
 
   if (!isAuthor) {
     return (
@@ -229,7 +206,7 @@ export default function BookSettings({ params }: { params: { id: string } }) {
             Once you delete a book, there is no going back. Please be certain.
           </p>
           <button
-            onClick={deleteBook}
+            onClick={handleDeleteBook}
             className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition flex items-center gap-2"
           >
             <Trash2 className="w-4 h-4" />

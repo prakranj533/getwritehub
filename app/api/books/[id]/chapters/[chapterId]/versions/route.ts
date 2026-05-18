@@ -20,13 +20,11 @@ export async function GET(
 
     const snapshot = await adminDb.collection('chapterVersions')
       .where('chapterId', '==', params.chapterId)
-      .orderBy('version', 'desc')
       .get();
 
-    const versions = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const versions = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .sort((a: any, b: any) => (b.version || 0) - (a.version || 0)); // newest first
 
     return NextResponse.json(versions);
   } catch (error) {

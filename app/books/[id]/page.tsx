@@ -236,7 +236,7 @@ export default function BookPage({ params }: { params: { id: string } }) {
                   {book.authorName || book.authorEmail}
                 </div>
                 <div className="text-gray-400 uppercase tracking-widest text-xs">
-                  Last Updated {book.updatedAt ? formatDate(book.updatedAt.toDate?.() || book.updatedAt) : "Recently"}
+                  Last Updated {book.updatedAt ? formatDate(book.updatedAt) : "Recently"}
                 </div>
               </div>
             </div>
@@ -380,7 +380,7 @@ export default function BookPage({ params }: { params: { id: string } }) {
                       </Link>
                       
                       <div className="flex items-center gap-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-8">
-                        <span>{chapter.updatedAt ? formatRelativeTime(chapter.updatedAt.toDate?.() || chapter.updatedAt) : "Just now"}</span>
+                        <span>{chapter.updatedAt ? formatRelativeTime(chapter.updatedAt) : "Just now"}</span>
                         {chapter.reviewCount > 0 && (
                           <span className="flex items-center gap-1.5 text-amber-500">
                             <GitPullRequest className="w-4 h-4" />

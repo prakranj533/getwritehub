@@ -237,7 +237,7 @@ export default function Home() {
                     </span>
                   </div>
                   <span className="text-xs uppercase tracking-wider">
-                    {book.updatedAt ? formatDate(book.updatedAt.toDate?.() || book.updatedAt) : "Recently"}
+                    {book.updatedAt ? formatDate(book.updatedAt) : "Recently"}
                   </span>
                 </div>
 

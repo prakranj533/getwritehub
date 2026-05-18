@@ -1,0 +1,49 @@
+[debug] [2026-05-18T09:57:33.041Z] ----------------------------------------------------------------------
+[debug] [2026-05-18T09:57:33.042Z] Command:       /opt/homebrew/Cellar/node/25.9.0_3/bin/node /opt/homebrew/bin/firebase deploy --only hosting
+[debug] [2026-05-18T09:57:33.042Z] CLI Version:   15.18.0
+[debug] [2026-05-18T09:57:33.042Z] Platform:      darwin
+[debug] [2026-05-18T09:57:33.042Z] Node Version:  v25.9.0
+[debug] [2026-05-18T09:57:33.042Z] Time:          Mon May 18 2026 15:27:33 GMT+0530 (India Standard Time)
+[debug] [2026-05-18T09:57:33.042Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-18T09:57:33.677Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-18T09:57:33.677Z] > authorizing via signed-in user (parth.upadhye4@gmail.com)
+[debug] [2026-05-18T09:57:33.677Z] [iam] checking project getbook-b4581 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-05-18T09:57:33.677Z] Checked if tokens are valid: true, expires at: 1779100404815
+[debug] [2026-05-18T09:57:33.677Z] Checked if tokens are valid: true, expires at: 1779100404815
+[debug] [2026-05-18T09:57:33.677Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/getbook-b4581:testIamPermissions [none]
+[debug] [2026-05-18T09:57:33.677Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/getbook-b4581:testIamPermissions  x-goog-user-project=getbook-b4581
+[debug] [2026-05-18T09:57:33.677Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/getbook-b4581:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-05-18T09:57:35.259Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/getbook-b4581:testIamPermissions 200
+[debug] [2026-05-18T09:57:35.259Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/getbook-b4581:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-05-18T09:57:35.259Z] Checked if tokens are valid: true, expires at: 1779100404815
+[debug] [2026-05-18T09:57:35.259Z] Checked if tokens are valid: true, expires at: 1779100404815
+[debug] [2026-05-18T09:57:35.259Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/getbook-b4581 [none]
+[debug] [2026-05-18T09:57:36.633Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/getbook-b4581 200
+[debug] [2026-05-18T09:57:36.634Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/getbook-b4581 {"projectId":"getbook-b4581","projectNumber":"359447545058","displayName":"GETBOOK","name":"projects/getbook-b4581","resources":{"hostingSite":"getbook-b4581","realtimeDatabaseInstance":"getbook-b4581-default-rtdb"},"state":"ACTIVE","etag":"1_753d2851-015c-4e7a-ad47-a66290adfc65"}
+[debug] [2026-05-18T09:57:37.215Z] defaultcredentials: writing to file /Users/devparth/.config/firebase/parth_upadhye4_gmail.com_application_default_credentials.json
+[debug] [2026-05-18T09:57:37.215Z] Checked if tokens are valid: true, expires at: 1779100404815
+[debug] [2026-05-18T09:57:37.215Z] Checked if tokens are valid: true, expires at: 1779100404815
+[debug] [2026-05-18T09:57:37.216Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/getbook-b4581/sites pageToken=&pageSize=10
+[debug] [2026-05-18T09:57:38.473Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/getbook-b4581/sites 200
+[debug] [2026-05-18T09:57:38.474Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/getbook-b4581/sites {"sites":[{"name":"projects/getbook-b4581/sites/getbook-b4581","defaultUrl":"https://getbook-b4581.web.app","appId":"1:359447545058:web:ed30d72fafe8bbc75c0abb","type":"DEFAULT_SITE"}]}
+[debug] [2026-05-18T09:57:38.474Z] Checked if tokens are valid: true, expires at: 1779100404815
+[debug] [2026-05-18T09:57:38.474Z] Checked if tokens are valid: true, expires at: 1779100404815
+[debug] [2026-05-18T09:57:38.474Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:359447545058:web:ed30d72fafe8bbc75c0abb/config [none]
+[debug] [2026-05-18T09:57:39.048Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:359447545058:web:ed30d72fafe8bbc75c0abb/config 200
+[debug] [2026-05-18T09:57:39.048Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:359447545058:web:ed30d72fafe8bbc75c0abb/config {"projectId":"getbook-b4581","appId":"1:359447545058:web:ed30d72fafe8bbc75c0abb","databaseURL":"https://getbook-b4581-default-rtdb.firebaseio.com","storageBucket":"getbook-b4581.firebasestorage.app","apiKey":"AIzaSyC3XTuPwVyBWtIflr2rxk03LzMdIsmQ-X0","authDomain":"getbook-b4581.firebaseapp.com","messagingSenderId":"359447545058","measurementId":"G-PJD6C918ER","projectNumber":"359447545058","version":"2"}
+[info] 
+   Thank you for trying our early preview of Next.js support on Firebase Hosting.
+   During the preview, support is best-effort and breaking changes can be expected. Proceed with caution.
+
+   Documentation: https://firebase.google.com/docs/hosting/frameworks/nextjs
+   File a bug: https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   Submit a feature request: https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+[debug] [2026-05-18T09:57:40.294Z] Checked if tokens are valid: true, expires at: 1779100404815
+[debug] [2026-05-18T09:57:40.294Z] Checked if tokens are valid: true, expires at: 1779100404815
+[debug] [2026-05-18T09:57:40.294Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/getbook-b4581/sites/getbook-b4581 [none]
+[debug] [2026-05-18T09:57:40.948Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/getbook-b4581/sites/getbook-b4581 200
+[debug] [2026-05-18T09:57:40.948Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/getbook-b4581/sites/getbook-b4581 {"name":"projects/getbook-b4581/sites/getbook-b4581","defaultUrl":"https://getbook-b4581.web.app","appId":"1:359447545058:web:ed30d72fafe8bbc75c0abb","type":"DEFAULT_SITE"}

@@ -25,7 +25,7 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
-import { formatDate, formatRelativeTime } from "@/lib/utils";
+import { formatDate, formatRelativeTime, toDate } from "@/lib/utils";
 import {
   saveDraftOffline,
   getDraftOffline,
@@ -87,7 +87,7 @@ export default function ChapterPage({
       const draft = await getDraftOffline(params.chapterId);
       if (draft && !draft.synced) {
         setHasUnsyncedChanges(true);
-        if (chapter && new Date(draft.lastSaved) > new Date(chapter.updatedAt?.toMillis?.() || 0)) {
+        if (chapter && new Date(draft.lastSaved) > (toDate(chapter.updatedAt) || new Date(0))) {
           setContent(draft.content);
           setTitle(draft.title);
           if (draft.aiSuggestions) {
@@ -191,7 +191,7 @@ export default function ChapterPage({
       setChapter({ ...ch, reviews: revs, versions: vers });
 
       const draft = await getDraftOffline(params.chapterId).catch(() => null);
-      if (draft && !draft.synced && draft.lastSaved > (ch.updatedAt?.toMillis?.() || 0)) {
+      if (draft && !draft.synced && draft.lastSaved > (toDate(ch.updatedAt)?.getTime() || 0)) {
         setContent(draft.content);
         setTitle(draft.title);
         setHasUnsyncedChanges(true);
@@ -203,7 +203,8 @@ export default function ChapterPage({
         setContent(ch.content);
         setTitle(ch.title);
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error loading chapter:', error);
       try {
         const draft = await getDraftOffline(params.chapterId);
         if (draft) {
@@ -211,10 +212,10 @@ export default function ChapterPage({
           setTitle(draft.title);
           setHasUnsyncedChanges(!draft.synced);
         } else {
-          setError("Failed to load chapter. You appear to be offline.");
+          setError(`Failed to load chapter: ${error?.message || 'Unknown error'}`);
         }
       } catch (e) {
-        setError("Failed to load chapter");
+        setError(`Failed to load chapter: ${error?.message || 'Unknown error'}`);
       }
     } finally {
       setLoading(false);
@@ -539,7 +540,7 @@ export default function ChapterPage({
                           Restore
                         </button>
                       </div>
-                      <p className="text-[10px] font-medium text-gray-500 line-clamp-1">{v.createdAt ? formatDate(v.createdAt.toDate?.() || v.createdAt) : "Recently"}</p>
+                      <p className="text-[10px] font-medium text-gray-500 line-clamp-1">{v.createdAt ? formatDate(v.createdAt) : "Recently"}</p>
                     </div>
                   ))
                 )}

@@ -22,13 +22,11 @@ export async function GET(
 
     const snapshot = await adminDb.collection('chapters')
       .where('bookId', '==', params.id)
-      .orderBy('order', 'asc')
       .get();
 
-    const chapters = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const chapters = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .sort((a: any, b: any) => (a.order || 0) - (b.order || 0)); // ascending order
 
     return NextResponse.json(chapters);
   } catch (error) {

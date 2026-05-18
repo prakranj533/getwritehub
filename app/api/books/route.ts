@@ -67,11 +67,10 @@ export async function GET(request: Request) {
 
       return NextResponse.json(allBooks);
     } else {
-      // Public books
+      // Public books — sort in memory to avoid requiring composite index
       const snapshot = await adminDb.collection('books')
         .where('isPublic', '==', true)
         .where('status', '==', 'published')
-        .orderBy('updatedAt', 'desc')
         .get();
       
       const books = snapshot.docs.map(doc => ({
@@ -79,11 +78,21 @@ export async function GET(request: Request) {
         ...doc.data(),
       }));
 
+      // Sort by updatedAt descending in memory
+      books.sort((a: any, b: any) => {
+        const dateA = a.updatedAt?.toDate?.() || new Date(0);
+        const dateB = b.updatedAt?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
+
       return NextResponse.json(books);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching books:', error);
-    return NextResponse.json({ error: 'Failed to fetch books' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch books', detail: error?.message },
+      { status: 500 }
+    );
   }
 }
 

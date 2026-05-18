@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
-import { verifyAuth, unauthorizedResponse } from '@/lib/api-auth';
+import { verifyAuth, unauthorizedResponse, checkIsAuthor, checkBookAccess } from '@/lib/api-auth';
 import * as admin from 'firebase-admin';
 
 export async function GET(
@@ -8,6 +8,16 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const bookDoc = await adminDb.collection('books').doc(params.id).get();
+    if (!bookDoc.exists) return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+    const bookData = bookDoc.data();
+    if (!bookData?.isPublic && bookData?.status !== 'published') {
+      const user = await verifyAuth(request);
+      if (!user) return unauthorizedResponse();
+      const hasAccess = await checkBookAccess(params.id, user.uid, user.email || '');
+      if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const snapshot = await adminDb.collection('collaborators')
       .where('bookId', '==', params.id)
       .get();
@@ -31,6 +41,9 @@ export async function POST(
   try {
     const user = await verifyAuth(request);
     if (!user) return unauthorizedResponse();
+
+    const isAuthor = await checkIsAuthor(params.id, user.uid);
+    if (!isAuthor) return NextResponse.json({ error: 'Only the author can add collaborators' }, { status: 403 });
 
     const { userEmail, userName, role } = await request.json();
 
@@ -60,11 +73,19 @@ export async function DELETE(
     const user = await verifyAuth(request);
     if (!user) return unauthorizedResponse();
 
+    const isAuthor = await checkIsAuthor(params.id, user.uid);
+    if (!isAuthor) return NextResponse.json({ error: 'Only the author can remove collaborators' }, { status: 403 });
+
     const { searchParams } = new URL(request.url);
     const collaboratorId = searchParams.get('collaboratorId');
 
     if (!collaboratorId) {
       return NextResponse.json({ error: 'Collaborator ID is required' }, { status: 400 });
+    }
+
+    const collabDoc = await adminDb.collection('collaborators').doc(collaboratorId).get();
+    if (!collabDoc.exists || collabDoc.data()?.bookId !== params.id) {
+       return NextResponse.json({ error: 'Collaborator not found' }, { status: 404 });
     }
 
     await adminDb.collection('collaborators').doc(collaboratorId).delete();

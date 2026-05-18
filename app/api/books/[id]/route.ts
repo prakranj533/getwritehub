@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
-import { verifyAuth, unauthorizedResponse } from '@/lib/api-auth';
+import { verifyAuth, unauthorizedResponse, checkBookAccess } from '@/lib/api-auth';
 import * as admin from 'firebase-admin';
 
 export async function GET(
@@ -13,7 +13,20 @@ export async function GET(
       return NextResponse.json({ error: 'Book not found' }, { status: 404 });
     }
 
-    const book = { id: bookDoc.id, ...bookDoc.data() };
+    const bookData = bookDoc.data();
+
+    if (!bookData?.isPublic && bookData?.status !== 'published') {
+      const user = await verifyAuth(request);
+      if (!user) {
+        return unauthorizedResponse();
+      }
+      const hasAccess = await checkBookAccess(params.id, user.uid, user.email || '');
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
+    const book = { id: bookDoc.id, ...bookData };
     return NextResponse.json(book);
   } catch (error) {
     console.error('Error fetching book:', error);
@@ -70,7 +83,25 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    await adminDb.collection('books').doc(params.id).delete();
+    const batch = adminDb.batch();
+    batch.delete(bookDoc.ref);
+
+    const chapters = await adminDb.collection('chapters').where('bookId', '==', params.id).get();
+    chapters.docs.forEach(doc => batch.delete(doc.ref));
+
+    const collaborators = await adminDb.collection('collaborators').where('bookId', '==', params.id).get();
+    collaborators.docs.forEach(doc => batch.delete(doc.ref));
+
+    for (const chapter of chapters.docs) {
+      const versions = await adminDb.collection('chapterVersions').where('chapterId', '==', chapter.id).get();
+      versions.docs.forEach(doc => batch.delete(doc.ref));
+      
+      const reviews = await adminDb.collection('reviews').where('chapterId', '==', chapter.id).get();
+      reviews.docs.forEach(doc => batch.delete(doc.ref));
+    }
+
+    await batch.commit();
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting book:', error);

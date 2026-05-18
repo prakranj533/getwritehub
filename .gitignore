@@ -27,3 +27,4 @@ Thumbs.db
 
 # embedded repos
 Getwritehub/
+\n# Secret Files\n*firebase-adminsdk*.json\nservice-account.json

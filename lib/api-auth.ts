@@ -1,4 +1,4 @@
-import { adminAuth } from './firebase-admin';
+import { adminAuth, adminDb } from './firebase-admin';
 import { NextResponse } from 'next/server';
 
 export async function verifyAuth(request: Request) {
@@ -19,4 +19,23 @@ export async function verifyAuth(request: Request) {
 
 export function unauthorizedResponse() {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+}
+
+export async function checkIsAuthor(bookId: string, uid: string) {
+  const bookDoc = await adminDb.collection('books').doc(bookId).get();
+  if (!bookDoc.exists) return false;
+  return bookDoc.data()?.authorId === uid;
+}
+
+export async function checkBookAccess(bookId: string, uid: string, email: string) {
+  const bookDoc = await adminDb.collection('books').doc(bookId).get();
+  if (!bookDoc.exists) return false;
+  if (bookDoc.data()?.authorId === uid) return true;
+  
+  const collabSnapshot = await adminDb.collection('collaborators')
+    .where('bookId', '==', bookId)
+    .where('userEmail', '==', email)
+    .get();
+    
+  return !collabSnapshot.empty;
 }

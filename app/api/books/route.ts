@@ -13,20 +13,74 @@ export async function GET(request: Request) {
 
     if (mine) {
       if (!user) return unauthorizedResponse();
-      // Filter by authorId or authorEmail (to be safe)
-      query = query.where('authorId', '==', user.uid);
+      
+      // Fetch books where user is author
+      const ownedBooksSnapshot = await adminDb.collection('books')
+        .where('authorId', '==', user.uid)
+        .get();
+      
+      // Fetch books where user is collaborator
+      // We use email as userId in collaborators collection as per current implementation
+      const collaborationsSnapshot = await adminDb.collection('collaborators')
+        .where('userEmail', '==', user.email)
+        .get();
+      
+      const collaboratedBookIds = collaborationsSnapshot.docs.map(doc => doc.data().bookId);
+      
+      let allBooks = ownedBooksSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Fetch the actual book documents for collaborations
+      if (collaboratedBookIds.length > 0) {
+        // Firestore 'in' query limited to 10 items. For a real app we'd need a better way.
+        // But for now let's fetch them.
+        const chunkedIds = [];
+        for (let i = 0; i < collaboratedBookIds.length; i += 10) {
+          chunkedIds.push(collaboratedBookIds.slice(i, i + 10));
+        }
+
+        for (const ids of chunkedIds) {
+          const collaboratedBooksSnapshot = await adminDb.collection('books')
+            .where(admin.firestore.FieldPath.documentId(), 'in', ids)
+            .get();
+          
+          collaboratedBooksSnapshot.docs.forEach(doc => {
+            // Avoid duplicates if user is both author and collaborator (shouldn't happen but safe)
+            if (!allBooks.find(b => b.id === doc.id)) {
+              allBooks.push({
+                id: doc.id,
+                ...doc.data(),
+              });
+            }
+          });
+        }
+      }
+
+      // Sort merged results
+      allBooks.sort((a: any, b: any) => {
+        const dateA = a.updatedAt?.toDate?.() || 0;
+        const dateB = b.updatedAt?.toDate?.() || 0;
+        return dateB - dateA;
+      });
+
+      return NextResponse.json(allBooks);
     } else {
       // Public books
-      query = query.where('isPublic', '==', true).where('status', '==', 'published');
+      const snapshot = await adminDb.collection('books')
+        .where('isPublic', '==', true)
+        .where('status', '==', 'published')
+        .orderBy('updatedAt', 'desc')
+        .get();
+      
+      const books = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return NextResponse.json(books);
     }
-
-    const snapshot = await query.orderBy('updatedAt', 'desc').get();
-    const books = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    return NextResponse.json(books);
   } catch (error) {
     console.error('Error fetching books:', error);
     return NextResponse.json({ error: 'Failed to fetch books' }, { status: 500 });

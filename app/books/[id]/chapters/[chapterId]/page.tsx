@@ -82,24 +82,7 @@ export default function ChapterPage({
   const [lastLocalSave, setLastLocalSave] = useState<Date | null>(null);
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-save to local storage every 5 seconds when content changes
-  useEffect(() => {
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(() => {
-      if (content && title) {
-        saveLocally();
-      }
-    }, 5000);
-    return () => {
-      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    };
-  }, [content, title]);
-
-  useEffect(() => {
-    loadOfflineDraft();
-  }, [params.chapterId]);
-
-  const loadOfflineDraft = async () => {
+  const loadOfflineDraft = useCallback(async () => {
     try {
       const draft = await getDraftOffline(params.chapterId);
       if (draft && !draft.synced) {
@@ -116,9 +99,9 @@ export default function ChapterPage({
     } catch (e) {
       // IndexedDB not available
     }
-  };
+  }, [params.chapterId, chapter]);
 
-  const saveLocally = async () => {
+  const saveLocally = useCallback(async () => {
     try {
       const draft: OfflineDraft = {
         id: params.chapterId,
@@ -150,8 +133,24 @@ export default function ChapterPage({
         console.error("Failed to save locally:", e2);
       }
     }
-  };
+  }, [params.chapterId, params.id, title, content, aiReviewed, aiSuggestions]);
 
+  // Auto-save to local storage every 5 seconds when content changes
+  useEffect(() => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      if (content && title) {
+        saveLocally();
+      }
+    }, 5000);
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  }, [content, title, saveLocally]);
+
+  useEffect(() => {
+    loadOfflineDraft();
+  }, [loadOfflineDraft]);
   const fetchChapterData = useCallback(async () => {
     if (!isOnline) {
       try {
@@ -174,7 +173,7 @@ export default function ChapterPage({
     }
 
     try {
-      const ch = await getChapter(params.chapterId);
+      const ch = await getChapter(params.chapterId, params.id);
       if (!ch) {
         setError("Chapter not found");
         setLoading(false);
@@ -186,8 +185,8 @@ export default function ChapterPage({
         return;
       }
 
-      const revs = await getReviews(params.chapterId);
-      const vers = await getChapterVersions(params.chapterId);
+      const revs = await getReviews(params.chapterId, params.id);
+      const vers = await getChapterVersions(params.chapterId, params.id);
 
       setChapter({ ...ch, reviews: revs, versions: vers });
 
@@ -268,7 +267,7 @@ export default function ChapterPage({
       await updateChapter(params.chapterId, { 
         title, 
         content,
-      });
+      }, params.id);
       
       setHasUnsyncedChanges(false);
       await markDraftSynced(params.chapterId).catch(() => {});
@@ -295,7 +294,7 @@ export default function ChapterPage({
       return;
     }
     try {
-      await updateChapter(params.chapterId, { status: "review" });
+      await updateChapter(params.chapterId, { status: "review" }, params.id);
       fetchChapterData();
     } catch (error) {
       console.error("Error submitting for review:", error);
@@ -304,7 +303,7 @@ export default function ChapterPage({
 
   const publishChapter = async () => {
     try {
-      await updateChapter(params.chapterId, { status: "published" });
+      await updateChapter(params.chapterId, { status: "published" }, params.id);
       fetchChapterData();
     } catch (error) {
       console.error("Error publishing chapter:", error);
@@ -322,7 +321,7 @@ export default function ChapterPage({
         reviewerName: user.name || user.email || "Anonymous",
         status: reviewStatus,
         comment: reviewComment,
-      });
+      }, params.id);
       setReviewComment("");
       setShowReviewForm(false);
       fetchChapterData();
@@ -335,7 +334,7 @@ export default function ChapterPage({
     if (!confirm("Restore this version? Current content will be saved as a new version.")) return;
     if (!chapter || !user) return;
     try {
-      await updateChapter(params.chapterId, { content: versionContent });
+      await updateChapter(params.chapterId, { content: versionContent }, params.id);
       fetchChapterData();
     } catch (error) {
       console.error("Error restoring version:", error);
@@ -371,463 +370,328 @@ export default function ChapterPage({
   const hasReviews = (chapter?.reviews?.length || 0) > 0;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 h-[calc(100vh-80px)] flex flex-col">
+      {/* Dynamic Header */}
+      <header className="flex items-center justify-between mb-8 bg-white/50 backdrop-blur-sm p-4 rounded-3xl border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-6">
           <Link
             href={`/books/${params.id}`}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+            className="group flex items-center justify-center w-12 h-12 bg-gray-50 text-gray-400 hover:text-indigo-600 hover:bg-white hover:shadow-md rounded-2xl transition-all duration-300"
           >
-            <ArrowLeft className="w-4 h-4" />
-            Back to book
+            <ArrowLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
           </Link>
+          <div>
+            <div className="flex items-center gap-3 mb-0.5">
+              <h1 className="text-xl font-black text-gray-900 tracking-tight">{title || "Untitled Chapter"}</h1>
+              <span className={`px-3 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full ${
+                chapter?.status === "published" ? "bg-green-100 text-green-600" : "bg-indigo-50 text-indigo-500"
+              }`}>
+                {chapter?.status || "Draft"}
+              </span>
+            </div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              Editing as {user?.name || "Author"}
+              <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+              {isOnline ? (
+                <span className="flex items-center gap-1 text-green-500">
+                  <Wifi className="w-3 h-3" /> Cloud Sync Active
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-amber-500">
+                  <WifiOff className="w-3 h-3" /> Offline Mode
+                </span>
+              )}
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-              isOnline ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"
+          {hasUnsyncedChanges && (
+            <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-amber-100">
+              <AlertCircle className="w-3.5 h-3.5" />
+              Unsaved Changes
+            </div>
+          )}
+
+          <div className="h-10 w-px bg-gray-100 mx-2"></div>
+
+          <button
+            onClick={saveChapter}
+            disabled={saving || !hasUnsyncedChanges}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black transition-all duration-300 shadow-lg ${
+              hasUnsyncedChanges 
+                ? "bg-indigo-600 text-white shadow-indigo-100 hover:bg-indigo-700 hover:scale-105" 
+                : "bg-gray-50 text-gray-300 cursor-not-allowed"
             }`}
           >
-            {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-            {isOnline ? "Online" : "Offline"}
+            {saving ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            ) : (
+              <Save className="w-5 h-5" />
+            )}
+            {isOnline ? "Sync Changes" : "Save Locally"}
+          </button>
+        </div>
+      </header>
+
+      <div className="flex-1 flex gap-8 overflow-hidden">
+        {/* Editor Side */}
+        <div className="flex-1 flex flex-col min-w-0 bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl shadow-gray-200/50 overflow-hidden relative">
+          {/* Editor Status Bar */}
+          <div className="flex items-center justify-between px-10 py-4 bg-gray-50/50 border-b border-gray-100">
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Chapter Title"
+              className="bg-transparent border-none p-0 text-sm font-black text-gray-900 focus:ring-0 placeholder:text-gray-300 flex-1"
+            />
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                <Clock className="w-3.5 h-3.5" />
+                {lastLocalSave ? `Last save ${formatRelativeTime(lastLocalSave)}` : "Not saved yet"}
+              </div>
+            </div>
           </div>
 
-          {offlineSaved && (
-            <div className="flex items-center gap-1 text-xs text-green-600">
-              <HardDrive className="w-3 h-3" />
-              Saved locally
-            </div>
-          )}
-
-          {hasUnsyncedChanges && (
-            <div className="flex items-center gap-1 text-xs text-orange-600">
-              <AlertCircle className="w-3 h-3" />
-              Unsynced
-            </div>
-          )}
-
-          {chapter && (
-            <>
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  chapter.status === "published"
-                    ? "bg-green-100 text-green-700"
-                    : chapter.status === "review"
-                    ? "bg-yellow-100 text-yellow-700"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-              >
-                {chapter.status}
-              </span>
-              <span className="text-sm text-gray-500">
-                v{chapter.version} • Updated {chapter.updatedAt ? formatRelativeTime(chapter.updatedAt.toDate?.() || chapter.updatedAt) : "Just now"}
-              </span>
-            </>
-          )}
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            <RichEditor
+              value={content}
+              onChange={setContent}
+              placeholder="Tell your story..."
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Editor */}
-        <div className="lg:col-span-2 space-y-4">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full text-2xl font-bold border-0 border-b-2 border-transparent focus:border-indigo-500 focus:ring-0 bg-transparent px-0"
-            placeholder="Chapter Title"
-          />
-
-          <RichEditor
-            value={content}
-            onChange={(val) => setContent(val)}
-            placeholder="Start writing your chapter... (works offline too!)"
-          />
-
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="text-sm text-gray-500">
-              {content.replace(/<[^>]*>/g, "").length} characters •{" "}
-              {content.replace(/<[^>]*>/g, " ").split(/\s+/).filter((w) => w.length > 0).length} words
-              {lastLocalSave && (
-                <span className="ml-2">• Auto-saved {formatRelativeTime(lastLocalSave)}</span>
-              )}
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={saveLocally}
-                className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition flex items-center gap-2 text-sm"
-              >
-                <HardDrive className="w-4 h-4" />
-                Save Local
-              </button>
-
+        {/* Right Sidebar - Tools */}
+        <aside className="w-80 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
+          {/* Quick Actions Card */}
+          <div className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm">
+            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-6 px-1">Publishing Pipeline</h3>
+            <div className="space-y-3">
               <button
                 onClick={runAIReview}
-                disabled={aiLoading || !isOnline}
-                className="px-3 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition disabled:opacity-50 flex items-center gap-2 text-sm"
-                title={!isOnline ? "Go online to use AI Review" : "Run AI Review on your writing"}
+                disabled={aiLoading}
+                className="w-full flex items-center justify-between p-4 bg-indigo-50 text-indigo-700 rounded-2xl font-bold hover:bg-indigo-100 transition-all group"
               >
-                <Sparkles className="w-4 h-4" />
-                {aiLoading ? "Reviewing..." : "AI Review"}
-              </button>
-
-              <button
-                onClick={submitToBranch}
-                disabled={saving || !isOnline || !hasUnsyncedChanges}
-                className="px-3 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition disabled:opacity-50 flex items-center gap-2 text-sm"
-                title={!isOnline ? "Go online to submit" : hasUnsyncedChanges ? "Push your local changes to the book" : "No unsynced changes"}
-              >
-                <Upload className="w-4 h-4" />
-                {saving ? "Submitting..." : "Submit to Branch"}
+                <div className="flex items-center gap-3">
+                  <Sparkles className={`w-5 h-5 ${aiLoading ? "animate-pulse" : "group-hover:rotate-12 transition-transform"}`} />
+                  AI Manuscript Review
+                </div>
+                <ChevronRight className="w-4 h-4 opacity-50" />
               </button>
 
               {chapter?.status === "draft" && (
                 <button
                   onClick={submitForReview}
-                  disabled={!isOnline}
-                  className="px-3 py-2 bg-yellow-600 text-white rounded-lg font-medium hover:bg-yellow-700 transition disabled:opacity-50 text-sm"
+                  className="w-full flex items-center justify-between p-4 bg-amber-50 text-amber-700 rounded-2xl font-bold hover:bg-amber-100 transition-all"
                 >
-                  Submit for Review
+                  <div className="flex items-center gap-3">
+                    <GitPullRequest className="w-5 h-5" />
+                    Request Team Review
+                  </div>
+                  <ChevronRight className="w-4 h-4 opacity-50" />
                 </button>
               )}
 
-              {chapter?.status === "review" && hasReviews && allReviewsApproved && (
+              {chapter?.status === "review" && (
                 <button
                   onClick={publishChapter}
-                  disabled={!isOnline}
-                  className="px-3 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition disabled:opacity-50 text-sm"
+                  className="w-full flex items-center justify-between p-4 bg-green-50 text-green-700 rounded-2xl font-bold hover:bg-green-100 transition-all"
                 >
-                  Publish
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-5 h-5" />
+                    Final Publication
+                  </div>
+                  <ChevronRight className="w-4 h-4 opacity-50" />
                 </button>
               )}
             </div>
           </div>
-        </div>
 
-        {/* Sidebar */}
-        <div className="space-y-4">
-          {/* AI Review Panel */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <button
-              onClick={() => setShowAIPanel(!showAIPanel)}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
-            >
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-purple-600" />
-                <span className="font-semibold">AI Review</span>
-                {aiReviewed && (
-                  <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">
-                    {aiSuggestions.length} suggestions
-                  </span>
-                )}
-              </div>
-              {showAIPanel ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-            </button>
-
-            {showAIPanel && (
-              <div className="p-4 border-t border-gray-100">
-                {!aiReviewed ? (
-                  <div className="text-center py-4">
-                    <Sparkles className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500 mb-3">
-                      Get AI-powered feedback on grammar, style, and clarity
-                    </p>
-                    <button
-                      onClick={runAIReview}
-                      disabled={aiLoading || !isOnline}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
-                    >
-                      {aiLoading ? "Analyzing..." : !isOnline ? "Go online to review" : "Run AI Review"}
-                    </button>
-                  </div>
-                ) : aiSuggestions.length === 0 ? (
-                  <div className="text-center py-3">
-                    <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                    <p className="text-sm text-green-700 font-medium">Looks great! No issues found.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-80 overflow-y-auto">
-                    {aiSuggestions.map((suggestion, idx) => (
-                      <div
-                        key={idx}
-                        className={`border-l-2 pl-3 py-1 ${
-                          suggestion.type === "grammar"
-                            ? "border-red-400"
-                            : suggestion.type === "style"
-                            ? "border-yellow-400"
-                            : suggestion.type === "clarity"
-                            ? "border-blue-400"
-                            : "border-purple-400"
-                        }`}
-                      >
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <span
-                            className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                              suggestion.type === "grammar"
-                                ? "bg-red-100 text-red-700"
-                                : suggestion.type === "style"
-                                ? "bg-yellow-100 text-yellow-700"
-                                : suggestion.type === "clarity"
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-purple-100 text-purple-700"
-                            }`}
-                          >
-                            {suggestion.type}
-                          </span>
-                          {suggestion.line && (
-                            <span className="text-xs text-gray-400">
-                              Line {suggestion.line}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-600">{suggestion.message}</p>
-                        {suggestion.suggestion && (
-                          <p className="text-xs text-green-600 mt-0.5">
-                            Suggestion: {suggestion.suggestion}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                    <button
-                      onClick={runAIReview}
-                      disabled={aiLoading || !isOnline}
-                      className="w-full py-2 border border-purple-300 text-purple-600 rounded-lg text-xs font-medium hover:bg-purple-50 mt-2"
-                    >
-                      {aiLoading ? "Re-analyzing..." : "Re-run AI Review"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Reviews Section */}
-          {chapter && (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <button
-              onClick={() => setShowReviews(!showReviews)}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
-            >
-              <div className="flex items-center gap-2">
-                <GitPullRequest className="w-5 h-5 text-indigo-600" />
-                <span className="font-semibold">Reviews</span>
-                {chapter.reviews.length > 0 && (
-                  <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full">
-                    {chapter.reviews.length}
-                  </span>
-                )}
-              </div>
-              {showReviews ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-            </button>
-
-            {showReviews && (
-              <div className="p-4 border-t border-gray-100">
-                {chapter.reviews.length === 0 ? (
-                  <p className="text-gray-500 text-sm">No reviews yet</p>
-                ) : (
-                  <div className="space-y-3">
-                    {chapter.reviews.map((review) => (
-                      <div
-                        key={review.id}
-                        className="border-l-2 pl-3 py-1"
-                        style={{
-                          borderColor:
-                            review.status === "approved" ? "#22c55e" : "#eab308",
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">
-                            {review.reviewerName?.[0] || review.reviewerEmail[0]}
-                          </div>
-                          <span className="text-sm font-medium">
-                            {review.reviewerName || review.reviewerEmail}
-                          </span>
-                          {review.status === "approved" ? (
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-yellow-500" />
-                          )}
-                        </div>
-                        {review.comment && (
-                          <p className="text-sm text-gray-600 mt-1">
-                            {review.comment}
-                          </p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-1">
-                          {review.createdAt ? formatRelativeTime(review.createdAt.toDate?.() || review.createdAt) : "Just now"}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!hasReviewed && chapter.status === "review" && (
-                  <div className="mt-4 pt-4 border-t border-gray-100">
-                    {showReviewForm ? (
-                      <form onSubmit={submitReview} className="space-y-3">
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setReviewStatus("approved")}
-                            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-                              reviewStatus === "approved"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-gray-100 text-gray-700"
-                            }`}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setReviewStatus("changes_requested")}
-                            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-                              reviewStatus === "changes_requested"
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-gray-100 text-gray-700"
-                            }`}
-                          >
-                            Request Changes
-                          </button>
-                        </div>
-                        <textarea
-                          value={reviewComment}
-                          onChange={(e) => setReviewComment(e.target.value)}
-                          placeholder="Add a comment (optional)"
-                          className="w-full p-2 border border-gray-200 rounded-lg text-sm"
-                          rows={2}
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            type="submit"
-                            className="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
-                          >
-                            <Send className="inline w-3 h-3 mr-1" />
-                            Submit Review
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setShowReviewForm(false)}
-                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <button
-                        onClick={() => setShowReviewForm(true)}
-                        className="w-full py-2 border border-indigo-600 text-indigo-600 rounded-lg text-sm font-medium hover:bg-indigo-50 transition"
-                      >
-                        <MessageSquare className="inline w-4 h-4 mr-1" />
-                        Add Review
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Versions Section */}
-          {chapter && (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {/* Versions Accordion */}
+          <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
             <button
               onClick={() => setShowVersions(!showVersions)}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
+              className="w-full flex items-center justify-between p-6 hover:bg-gray-50 transition-colors"
             >
-              <div className="flex items-center gap-2">
-                <History className="w-5 h-5 text-purple-600" />
-                <span className="font-semibold">Version History</span>
-                {chapter.versions.length > 0 && (
-                  <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">
-                    {chapter.versions.length}
-                  </span>
-                )}
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+                  <History className="w-5 h-5 text-purple-600" />
+                </div>
+                <span className="font-black text-gray-900 text-sm">Manuscript History</span>
               </div>
-              {showVersions ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
+              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${showVersions ? "rotate-180" : ""}`} />
             </button>
-
             {showVersions && (
-              <div className="p-4 border-t border-gray-100">
-                {chapter.versions.length === 0 ? (
-                  <p className="text-gray-500 text-sm">No previous versions</p>
+              <div className="px-6 pb-6 space-y-3 animate-in fade-in slide-in-from-top-2">
+                {chapter?.versions?.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-4 italic">No previous versions found.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {chapter.versions.map((version) => (
-                      <div
-                        key={version.id}
-                        className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm">Version {version.version}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">
-                            {version.createdAt ? formatRelativeTime(version.createdAt.toDate?.() || version.createdAt) : "Just now"}
-                          </span>
-                          <button
-                            onClick={() => restoreVersion(version.content)}
-                            className="text-xs text-indigo-600 hover:underline"
-                          >
-                            Restore
-                          </button>
-                        </div>
+                  chapter?.versions?.slice(0, 5).map((v) => (
+                    <div key={v.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black text-purple-600 uppercase">Version {v.version}</span>
+                        <button
+                          onClick={() => restoreVersion(v.content)}
+                          className="text-[10px] font-black text-gray-400 hover:text-indigo-600 uppercase tracking-widest"
+                        >
+                          Restore
+                        </button>
                       </div>
-                    ))}
-                  </div>
+                      <p className="text-[10px] font-medium text-gray-500 line-clamp-1">{v.createdAt ? formatDate(v.createdAt.toDate?.() || v.createdAt) : "Recently"}</p>
+                    </div>
+                  ))
                 )}
               </div>
             )}
           </div>
-          )}
 
-          {/* Author Info */}
-          {chapter && (
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-3">
-              <User className="w-5 h-5 text-gray-400" />
-              <div>
-                <p className="text-sm text-gray-500">Written by</p>
-                <p className="font-medium">
-                  {chapter.authorName || chapter.authorEmail}
-                </p>
+          {/* Feedback Accordion */}
+          <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
+            <button
+              onClick={() => setShowReviews(!showReviews)}
+              className="w-full flex items-center justify-between p-6 hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                  <MessageSquare className="w-5 h-5 text-blue-600" />
+                </div>
+                <span className="font-black text-gray-900 text-sm">Team Feedback</span>
               </div>
-            </div>
-          </div>
-          )}
+              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${showReviews ? "rotate-180" : ""}`} />
+            </button>
+            {showReviews && (
+              <div className="px-6 pb-6 space-y-4 animate-in fade-in slide-in-from-top-2">
+                {chapter?.reviews?.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-4 italic">Waiting for peer reviews.</p>
+                ) : (
+                  chapter?.reviews?.map((r) => (
+                    <div key={r.id} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-black">
+                            {r.reviewerName?.[0] || r.reviewerEmail[0]}
+                          </div>
+                          <span className="text-[10px] font-black text-gray-900">{r.reviewerName || r.reviewerEmail}</span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest ${
+                          r.status === "approved" ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"
+                        }`}>
+                          {r.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 leading-relaxed pl-8">{r.comment}</p>
+                    </div>
+                  ))
+                )}
 
-          {/* Offline Writing Info */}
-          {!isOnline && (
-            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-              <div className="flex items-start gap-2">
-                <WifiOff className="w-5 h-5 text-orange-500 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-orange-800">Writing Offline</p>
-                  <p className="text-xs text-orange-600 mt-1">
-                    Your changes are auto-saved locally every 5 seconds. When you go online, click &quot;Submit to Branch&quot; to push your changes to the book.
-                  </p>
+                <button
+                  onClick={() => setShowReviewForm(true)}
+                  className="w-full py-3 bg-gray-50 hover:bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+                >
+                  Leave a Review
+                </button>
+              </div>
+            )}
+          </div>
+        </aside>
+      </div>
+
+      {/* AI Suggestions Floating Panel */}
+      {showAIPanel && (
+        <div className="fixed inset-y-0 right-0 w-96 glass-dark shadow-2xl z-[60] animate-in slide-in-from-right duration-500 p-8 flex flex-col">
+          <div className="flex items-center justify-between mb-10">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+                <Sparkles className="w-6 h-6 text-white" />
+              </div>
+              <h2 className="text-2xl font-black text-white tracking-tight">AI Insights</h2>
+            </div>
+            <button
+              onClick={() => setShowAIPanel(false)}
+              className="p-2 text-white/50 hover:text-white transition-colors"
+            >
+              <XCircle className="w-8 h-8" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar space-y-6">
+            {aiSuggestions.map((s, i) => (
+              <div key={i} className="bg-white/10 backdrop-blur-md rounded-[1.5rem] p-6 border border-white/10 hover:bg-white/15 transition-all">
+                <div className="flex items-center justify-between mb-4">
+                  <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                    s.type === "style" ? "bg-blue-500 text-white" :
+                    s.type === "grammar" ? "bg-pink-500 text-white" : "bg-purple-500 text-white"
+                  }`}>
+                    {s.type}
+                  </span>
+                </div>
+                <p className="text-sm text-indigo-50 font-medium leading-relaxed italic mb-4">
+                  &ldquo;{s.original || "Original text"}&rdquo;
+                </p>
+                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                  <p className="text-sm text-white font-bold mb-1">Recommendation</p>
+                  <p className="text-sm text-indigo-200">{s.suggestion || s.message}</p>
                 </div>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Modals - using plain styling to match the premium theme */}
+      {showReviewForm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95">
+            <h2 className="text-3xl font-black text-gray-900 mb-8 tracking-tight">Peer Review</h2>
+            <form onSubmit={submitReview} className="space-y-6">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReviewStatus("approved")}
+                  className={`py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${
+                    reviewStatus === "approved" ? "bg-green-600 text-white shadow-lg" : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+                  }`}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReviewStatus("changes_requested")}
+                  className={`py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${
+                    reviewStatus === "changes_requested" ? "bg-red-500 text-white shadow-lg" : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+                  }`}
+                >
+                  Request Changes
+                </button>
+              </div>
+              <textarea
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                placeholder="Share your thoughts on this chapter..."
+                className="w-full h-40 p-6 bg-gray-50 border-none rounded-[1.5rem] focus:ring-4 focus:ring-indigo-100 font-medium text-gray-900"
+                required
+              />
+              <div className="flex gap-4">
+                <button
+                  type="submit"
+                  className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl transition-all"
+                >
+                  Submit Feedback
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowReviewForm(false)}
+                  className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-black hover:bg-gray-200"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

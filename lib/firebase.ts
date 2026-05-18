@@ -29,7 +29,4 @@ export const storage = getStorage(app);
 // Initialize Analytics conditionally
 export const analytics = typeof window !== 'undefined' ? isSupported().then(yes => yes ? getAnalytics(app) : null) : null;
 
-// Set auth persistence to local
-setPersistence(auth, browserLocalPersistence).catch(console.error);
-
 export default app;

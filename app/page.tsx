@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/components/auth-provider";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Book, Users, GitBranch, Globe, Lock, Plus } from "lucide-react";
 import { formatDate } from "@/lib/utils";
@@ -18,11 +18,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"discover" | "my-books">("discover");
 
-  useEffect(() => {
-    fetchBooks();
-  }, [activeTab, user]);
-
-  const fetchBooks = async () => {
+  const fetchBooks = useCallback(async () => {
     try {
       setLoading(true);
       if (!user) {
@@ -60,62 +56,73 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, user]);
+
+  useEffect(() => {
+    fetchBooks();
+  }, [fetchBooks]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Hero Section */}
-      <div className="text-center py-16 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl mb-12 text-white">
-        <h1 className="text-4xl md:text-5xl font-bold mb-4">
-          Write Collaboratively Together &amp; Publish Together
-        </h1>
-        <p className="text-xl opacity-90 max-w-2xl mx-auto">
-          Connect with multiple people who share the same passion and interest. 
-          Co-author, review chapters, and publish your book as one team.
-        </p>
-        {!user && (
-          <div className="mt-8 flex gap-4 justify-center">
-            <Link
-              href="/auth/signin"
-              className="px-6 py-3 bg-white text-indigo-600 rounded-lg font-semibold hover:bg-gray-100 transition"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/auth/signup"
-              className="px-6 py-3 border-2 border-white text-white rounded-lg font-semibold hover:bg-white/10 transition"
-            >
-              Get Started
-            </Link>
-          </div>
-        )}
+      <div className="relative overflow-hidden text-center py-20 animated-gradient rounded-[2.5rem] mb-16 shadow-2xl">
+        <div className="absolute inset-0 bg-black/10"></div>
+        <div className="relative z-10 px-6">
+          <h1 className="text-5xl md:text-7xl font-extrabold mb-6 tracking-tight text-white drop-shadow-sm">
+            Write <span className="text-indigo-200">Together</span>, <br />
+            Publish <span className="text-purple-200">As One</span>
+          </h1>
+          <p className="text-xl md:text-2xl opacity-90 max-w-3xl mx-auto mb-10 font-medium text-indigo-50 leading-relaxed">
+            The ultimate collaborative writing platform. Connect with fellow authors, 
+            co-write in real-time, and bring your stories to life with precision.
+          </p>
+          {!user && (
+            <div className="flex flex-wrap gap-4 justify-center">
+              <Link
+                href="/auth/signin"
+                className="px-8 py-4 bg-white text-indigo-600 rounded-2xl font-bold hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 shadow-xl"
+              >
+                Welcome Back
+              </Link>
+              <Link
+                href="/auth/signup"
+                className="px-8 py-4 bg-white/10 backdrop-blur-md border-2 border-white/30 text-white rounded-2xl font-bold hover:bg-white/20 transition-all duration-300 transform hover:scale-105"
+              >
+                Join the Community
+              </Link>
+            </div>
+          )}
+        </div>
+        {/* Abstract shapes for decoration */}
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex gap-2">
+      {/* Tabs & Search Header */}
+      <div className="flex flex-col md:flex-row items-center justify-between mb-10 gap-6">
+        <div className="flex bg-gray-100/80 p-1.5 rounded-2xl backdrop-blur-sm border border-gray-200">
           <button
             onClick={() => setActiveTab("discover")}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 ${
               activeTab === "discover"
-                ? "bg-indigo-600 text-white"
-                : "bg-white text-gray-700 hover:bg-gray-100"
+                ? "bg-white text-indigo-600 shadow-md translate-z-0"
+                : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <Globe className="inline w-4 h-4 mr-2" />
+            <Globe className={`w-4 h-4 ${activeTab === "discover" ? "text-indigo-600" : ""}`} />
             Discover
           </button>
           {user && (
             <button
               onClick={() => setActiveTab("my-books")}
-              className={`px-4 py-2 rounded-lg font-medium transition ${
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 ${
                 activeTab === "my-books"
-                  ? "bg-indigo-600 text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-100"
+                  ? "bg-white text-indigo-600 shadow-md"
+                  : "text-gray-500 hover:text-gray-700"
               }`}
             >
-              <Book className="inline w-4 h-4 mr-2" />
-              My Books
+              <Book className={`w-4 h-4 ${activeTab === "my-books" ? "text-indigo-600" : ""}`} />
+              My Library
             </button>
           )}
         </div>
@@ -123,124 +130,172 @@ export default function Home() {
         {user && (
           <Link
             href="/books/new"
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition flex items-center gap-2"
+            className="group flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all duration-300 shadow-lg hover:shadow-indigo-200"
           >
-            <Plus className="w-4 h-4" />
-            New Book
+            <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
+            Start New Project
           </Link>
         )}
       </div>
 
       {/* Books Grid */}
       {loading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="bg-white rounded-3xl border border-gray-100 p-8 shadow-sm animate-pulse">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-gray-100"></div>
+                <div className="space-y-3 flex-1">
+                  <div className="h-4 bg-gray-100 rounded-full w-3/4"></div>
+                  <div className="h-3 bg-gray-100 rounded-full w-1/2"></div>
+                </div>
+              </div>
+              <div className="space-y-3 mb-6">
+                <div className="h-3 bg-gray-100 rounded-full w-full"></div>
+                <div className="h-3 bg-gray-100 rounded-full w-5/6"></div>
+              </div>
+              <div className="flex justify-between items-center pt-4 border-t border-gray-50">
+                <div className="h-4 bg-gray-100 rounded-full w-20"></div>
+                <div className="h-4 bg-gray-100 rounded-full w-20"></div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : books.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl">
-          <Book className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-600 mb-2">
-            {activeTab === "my-books" ? "No books yet" : "No public books yet"}
-          </h3>
-          <p className="text-gray-500">
-            {activeTab === "my-books"
-              ? "Create your first book to get started!"
-              : "Be the first to publish a book!"}
-          </p>
+        <div className="text-center py-24 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden relative">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -z-0"></div>
+          <div className="relative z-10">
+            <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mx-auto mb-6 rotate-12">
+              <Book className="w-10 h-10 text-indigo-500" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">
+              {activeTab === "my-books" ? "Your library is waiting..." : "The world is quiet right now"}
+            </h3>
+            <p className="text-gray-500 max-w-sm mx-auto mb-8 text-lg">
+              {activeTab === "my-books"
+                ? "Every great masterpiece starts with a single word. Today is the day you start yours."
+                : "Be the pioneer. Publish the first book and inspire a global community of writers."}
+            </p>
+            {user && activeTab === "my-books" && (
+              <Link
+                href="/books/new"
+                className="inline-flex items-center gap-2 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all duration-300 shadow-xl hover:shadow-indigo-200"
+              >
+                <Plus className="w-5 h-5" />
+                Create your first book
+              </Link>
+            )}
+          </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {books.map((book) => (
             <Link
               key={book.id}
               href={`/books/${book.id}`}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition group"
+              className="group bg-white rounded-[2rem] border border-gray-100 p-8 hover-lift shadow-sm relative overflow-hidden"
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
-                    {book.title[0]}
+              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/30 rounded-full -mr-12 -mt-12 transition-transform duration-500 group-hover:scale-150"></div>
+              
+              <div className="relative z-10">
+                <div className="flex items-start justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl premium-gradient flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-indigo-200">
+                      {book.title[0]}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-xl text-gray-900 group-hover:text-indigo-600 transition-colors duration-300">
+                        {book.title}
+                      </h3>
+                      <p className="text-sm font-medium text-gray-500">
+                        {book.authorName || book.authorEmail}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition">
-                      {book.title}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      by {book.authorName || book.authorEmail}
-                    </p>
+                  <div className="bg-gray-50 p-2 rounded-xl">
+                    {book.isPublic ? (
+                      <Globe className="w-5 h-5 text-indigo-500" />
+                    ) : (
+                      <Lock className="w-5 h-5 text-gray-400" />
+                    )}
                   </div>
                 </div>
-                {book.isPublic ? (
-                  <Globe className="w-4 h-4 text-green-500" />
-                ) : (
-                  <Lock className="w-4 h-4 text-gray-400" />
-                )}
-              </div>
 
-              <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                {book.description || "No description provided"}
-              </p>
+                <p className="text-gray-600 leading-relaxed mb-8 line-clamp-3 font-medium">
+                  {book.description || "No description provided for this masterpiece yet."}
+                </p>
 
-              <div className="flex items-center justify-between text-sm text-gray-500">
-                <div className="flex items-center gap-4">
-                  <span className="flex items-center gap-1">
-                    <Book className="w-4 h-4" />
-                    {book.chapterCount} chapters
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="w-4 h-4" />
-                    {book.collaboratorCount + 1}
+                <div className="flex items-center justify-between text-sm font-semibold text-gray-400">
+                  <div className="flex items-center gap-5">
+                    <span className="flex items-center gap-2 group-hover:text-indigo-500 transition-colors">
+                      <Book className="w-4 h-4" />
+                      {book.chapterCount}
+                    </span>
+                    <span className="flex items-center gap-2 group-hover:text-purple-500 transition-colors">
+                      <Users className="w-4 h-4" />
+                      {book.collaboratorCount + 1}
+                    </span>
+                  </div>
+                  <span className="text-xs uppercase tracking-wider">
+                    {book.updatedAt ? formatDate(book.updatedAt.toDate?.() || book.updatedAt) : "Recently"}
                   </span>
                 </div>
-                <span>{book.updatedAt ? formatDate(book.updatedAt.toDate?.() || book.updatedAt) : "Just now"}</span>
-              </div>
 
-              <div className="mt-4 flex items-center gap-2">
-                <span
-                  className={`px-2 py-1 text-xs rounded-full ${
-                    book.status === "published"
-                      ? "bg-green-100 text-green-700"
-                      : book.status === "draft"
-                      ? "bg-gray-100 text-gray-700"
-                      : "bg-yellow-100 text-yellow-700"
-                  }`}
-                >
-                  {book.status}
-                </span>
+                <div className="mt-6 flex items-center gap-3">
+                  <span
+                    className={`px-4 py-1.5 text-xs font-bold rounded-full tracking-wide uppercase ${
+                      book.status === "published"
+                        ? "bg-green-100 text-green-700"
+                        : book.status === "draft"
+                        ? "bg-blue-50 text-blue-600"
+                        : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    {book.status}
+                  </span>
+                  {book.collaboratorCount > 0 && (
+                    <span className="px-4 py-1.5 text-xs font-bold bg-purple-50 text-purple-600 rounded-full tracking-wide uppercase">
+                      Team
+                    </span>
+                  )}
+                </div>
               </div>
             </Link>
           ))}
         </div>
       )}
 
-      {/* Features Section */}
-      <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="bg-white rounded-xl p-6 shadow-sm">
-          <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4">
-            <Users className="w-6 h-6 text-indigo-600" />
+      {/* Modern Features Section */}
+      <div className="mt-24 pt-16 border-t border-gray-100">
+        <h2 className="text-3xl font-bold text-center mb-16 text-gray-900">Experience Professional Writing</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+          <div className="group bg-white rounded-3xl p-10 shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-500">
+            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-300">
+              <Users className="w-8 h-8 text-indigo-600" />
+            </div>
+            <h3 className="font-bold text-2xl mb-4">Elite Collaboration</h3>
+            <p className="text-gray-600 leading-relaxed text-lg">
+              Invite the best minds to your project. Work seamlessly across borders in a distraction-free environment.
+            </p>
           </div>
-          <h3 className="font-semibold text-lg mb-2">Collaborative Writing</h3>
-          <p className="text-gray-600">
-            Invite co-authors and editors to work together on your book in real-time.
-          </p>
-        </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm">
-          <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-            <GitBranch className="w-6 h-6 text-purple-600" />
+          <div className="group bg-white rounded-3xl p-10 shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-500">
+            <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-300">
+              <GitBranch className="w-8 h-8 text-purple-600" />
+            </div>
+            <h3 className="font-bold text-2xl mb-4">Smart Versioning</h3>
+            <p className="text-gray-600 leading-relaxed text-lg">
+              Never fear an edit. Track every word, branch your chapters, and merge brilliance effortlessly.
+            </p>
           </div>
-          <h3 className="font-semibold text-lg mb-2">Chapter Reviews</h3>
-          <p className="text-gray-600">
-            Submit chapters for review, get feedback, and merge changes with version control.
-          </p>
-        </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm">
-          <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-            <Globe className="w-6 h-6 text-green-600" />
+          <div className="group bg-white rounded-3xl p-10 shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-500">
+            <div className="w-16 h-16 bg-pink-50 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-300">
+              <Globe className="w-8 h-8 text-pink-600" />
+            </div>
+            <h3 className="font-bold text-2xl mb-4">Global Reach</h3>
+            <p className="text-gray-600 leading-relaxed text-lg">
+              One click to the world. Publish your work on our platform or export with professional formatting.
+            </p>
           </div>
-          <h3 className="font-semibold text-lg mb-2">Publish & Share</h3>
-          <p className="text-gray-600">
-            Make your book public or keep it private. Share with readers worldwide.
-          </p>
         </div>
       </div>
     </div>

@@ -1,6 +1,9 @@
 // next.config.mjs
 var nextConfig = {
-  reactStrictMode: true
+  reactStrictMode: true,
+  experimental: {
+    serverComponentsExternalPackages: ["@opentelemetry/api", "firebase-admin"]
+  }
 };
 var next_config_default = nextConfig;
 export {

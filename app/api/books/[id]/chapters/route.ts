@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
-import { verifyAuth, unauthorizedResponse } from '@/lib/api-auth';
+import { verifyAuth, unauthorizedResponse, checkBookAccess } from '@/lib/api-auth';
 import * as admin from 'firebase-admin';
 
 export async function GET(
@@ -8,6 +8,18 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const bookDoc = await adminDb.collection('books').doc(params.id).get();
+    if (!bookDoc.exists) {
+      return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+    }
+    const bookData = bookDoc.data();
+    if (!bookData?.isPublic && bookData?.status !== 'published') {
+      const user = await verifyAuth(request);
+      if (!user) return unauthorizedResponse();
+      const hasAccess = await checkBookAccess(params.id, user.uid, user.email || '');
+      if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const snapshot = await adminDb.collection('chapters')
       .where('bookId', '==', params.id)
       .orderBy('order', 'asc')
@@ -32,6 +44,9 @@ export async function POST(
   try {
     const user = await verifyAuth(request);
     if (!user) return unauthorizedResponse();
+
+    const hasAccess = await checkBookAccess(params.id, user.uid, user.email || '');
+    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { title, content, order } = await request.json();
 

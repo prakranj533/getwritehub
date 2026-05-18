@@ -129,43 +129,33 @@ export async function getChapters(bookId: string): Promise<Chapter[]> {
   return apiFetch(`/api/books/${bookId}/chapters`);
 }
 
-export async function getChapter(chapterId: string): Promise<Chapter | null> {
-  // Note: We need the bookId for the route, but our previous implementation
-  // didn't always have it. Let's see if we can find it or if we need a direct /api/chapters/[id]
-  // For now, let's assume we can get it from the book if needed, or re-route.
-  // Actually, I'll just use a flatter structure if needed, but I already made the nested routes.
-  // To keep it simple, I'll add a flat route for single chapter GET/PUT/DELETE
-  return apiFetch(`/api/books/unknown/chapters/${chapterId}`); 
+export async function getChapter(chapterId: string, bookId: string = 'unknown'): Promise<Chapter | null> {
+  return apiFetch(`/api/books/${bookId}/chapters/${chapterId}`); 
 }
 
-export async function updateChapter(chapterId: string, data: Partial<Chapter>): Promise<void> {
-  // Use 'unknown' as bookId since we don't have it here, and the API route only uses params.id (bookId) 
-  // but doesn't actually validate it for chapters yet. 
-  // Wait, I should probably make the API routes flat for items that have unique IDs.
-  await apiFetch(`/api/books/unknown/chapters/${chapterId}`, {
+export async function updateChapter(chapterId: string, data: Partial<Chapter>, bookId: string = 'unknown'): Promise<void> {
+  await apiFetch(`/api/books/${bookId}/chapters/${chapterId}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
-export async function deleteChapter(chapterId: string): Promise<void> {
-  await apiFetch(`/api/books/unknown/chapters/${chapterId}`, {
+export async function deleteChapter(chapterId: string, bookId: string = 'unknown'): Promise<void> {
+  await apiFetch(`/api/books/${bookId}/chapters/${chapterId}`, {
     method: 'DELETE',
   });
 }
 
 // Chapter Versions
 export async function createChapterVersion(data: Omit<ChapterVersion, 'id' | 'createdAt'>): Promise<ChapterVersion> {
-  // This is now handled as a side effect in updateChapter (PUT) but can be called separately if needed.
-  // For now, let's just make it a no-op if called from frontend, or implement a route.
   return apiFetch(`/api/books/unknown/chapters/${data.chapterId}/versions`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export async function getChapterVersions(chapterId: string): Promise<ChapterVersion[]> {
-  return apiFetch(`/api/books/unknown/chapters/${chapterId}/versions`);
+export async function getChapterVersions(chapterId: string, bookId: string = 'unknown'): Promise<ChapterVersion[]> {
+  return apiFetch(`/api/books/${bookId}/chapters/${chapterId}/versions`);
 }
 
 // Collaborators
@@ -180,23 +170,22 @@ export async function getCollaborators(bookId: string): Promise<Collaborator[]> 
   return apiFetch(`/api/books/${bookId}/collaborators`);
 }
 
-export async function removeCollaborator(collaboratorId: string): Promise<void> {
-  // We need bookId for the route. Let's assume we pass it or use 'unknown'.
-  await apiFetch(`/api/books/unknown/collaborators?collaboratorId=${collaboratorId}`, {
+export async function removeCollaborator(collaboratorId: string, bookId: string = 'unknown'): Promise<void> {
+  await apiFetch(`/api/books/${bookId}/collaborators?collaboratorId=${collaboratorId}`, {
     method: 'DELETE',
   });
 }
 
 // Reviews
-export async function createReview(data: Omit<Review, 'id' | 'createdAt' | 'updatedAt'>): Promise<Review> {
-  return apiFetch(`/api/books/unknown/chapters/${data.chapterId}/reviews`, {
+export async function createReview(data: Omit<Review, 'id' | 'createdAt' | 'updatedAt'>, bookId: string = 'unknown'): Promise<Review> {
+  return apiFetch(`/api/books/${bookId}/chapters/${data.chapterId}/reviews`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export async function getReviews(chapterId: string): Promise<Review[]> {
-  return apiFetch(`/api/books/unknown/chapters/${chapterId}/reviews`);
+export async function getReviews(chapterId: string, bookId: string = 'unknown'): Promise<Review[]> {
+  return apiFetch(`/api/books/${bookId}/chapters/${chapterId}/reviews`);
 }
 
 export async function updateReview(reviewId: string, data: Partial<Review>): Promise<void> {

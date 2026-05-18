@@ -15,7 +15,7 @@ export async function GET(
 
     const bookData = bookDoc.data();
 
-    if (!bookData?.isPublic && bookData?.status !== 'published') {
+    if (!(bookData?.isPublic === true && bookData?.status === 'published')) {
       const user = await verifyAuth(request);
       if (!user) {
         return unauthorizedResponse();

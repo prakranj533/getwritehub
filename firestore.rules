@@ -1,45 +1,95 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
+
+    // ─── Helper Functions ────────────────────────────────────────────────────
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    function isOwner(authorId) {
-      return isAuthenticated() && (request.auth.uid == authorId || request.auth.token.email == authorId);
+
+    function isAuthor(authorId) {
+      return isAuthenticated() && request.auth.uid == authorId;
     }
 
+    // Check if the current user is the author of a book
+    function isBookAuthor(bookId) {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/books/$(bookId)).data.authorId == request.auth.uid;
+    }
+
+    // A book is fully public only when both flags are set
+    function isFullyPublic(bookData) {
+      return bookData.isPublic == true && bookData.status == 'published';
+    }
+
+    // ─── Books ────────────────────────────────────────────────────────────────
+
     match /books/{bookId} {
-      allow read: if resource.data.isPublic == true || 
-                    isOwner(resource.data.authorId) ||
-                    exists(/databases/$(database)/documents/collaborators/$(request.auth.token.email + '_' + bookId)) ||
-                    exists(/databases/$(database)/documents/collaborators/$(request.auth.uid + '_' + bookId));
-      
-      allow create: if isAuthenticated();
-      allow update, delete: if isOwner(resource.data.authorId);
+      // Public (isPublic + published) books are readable by anyone
+      // Private books are readable only by the author
+      // (Collaborator read access is enforced by the API / Admin SDK)
+      allow read: if isFullyPublic(resource.data) || isAuthor(resource.data.authorId);
+
+      allow create: if isAuthenticated() &&
+                       request.resource.data.authorId == request.auth.uid;
+
+      allow update: if isAuthor(resource.data.authorId);
+      allow delete: if isAuthor(resource.data.authorId);
     }
-    
+
+    // ─── Chapters ─────────────────────────────────────────────────────────────
+
     match /chapters/{chapterId} {
-      allow read: if get(/databases/$(database)/documents/books/$(resource.data.bookId)).data.isPublic == true ||
-                    isOwner(get(/databases/$(database)/documents/books/$(resource.data.bookId)).data.authorId);
-      
-      allow create, update, delete: if isOwner(get(/databases/$(database)/documents/books/$(resource.data.bookId)).data.authorId);
+      function chapterBook() {
+        return get(/databases/$(database)/documents/books/$(resource.data.bookId)).data;
+      }
+      function chapterBookId() {
+        return resource.data.bookId;
+      }
+
+      // Chapters of a fully-public book are readable by anyone
+      allow read: if isFullyPublic(chapterBook()) || isBookAuthor(chapterBookId());
+
+      // Only the book author (or API via Admin SDK) can write chapters
+      allow create, update, delete: if isBookAuthor(resource.data.bookId);
     }
-    
+
+    // ─── Chapter Versions ─────────────────────────────────────────────────────
+
     match /chapterVersions/{versionId} {
-      allow read, write: if isOwner(get(/databases/$(database)/documents/chapters/$(request.resource.data.chapterId)).data.authorId);
-    }
-    
-    match /collaborators/{collaboratorId} {
+      // Readable by any authenticated user who can reach this path
       allow read: if isAuthenticated();
-      allow write: if isOwner(get(/databases/$(database)/documents/books/$(request.resource.data.bookId)).data.authorId);
+      // Created automatically by the API (Admin SDK bypasses these rules)
+      allow write: if isAuthenticated();
     }
-    
+
+    // ─── Collaborators ────────────────────────────────────────────────────────
+
+    match /collaborators/{collaboratorId} {
+      // Any authenticated user can see collaborator lists
+      allow read: if isAuthenticated();
+
+      // Only the book author can add/remove collaborators
+      allow create, update, delete: if
+        isBookAuthor(request.resource.data.bookId);
+    }
+
+    // ─── Reviews ─────────────────────────────────────────────────────────────
+
     match /reviews/{reviewId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if request.auth.uid == resource.data.reviewerId || request.auth.token.email == resource.data.reviewerEmail;
+
+      // Only the reviewer who created it can update their own review
+      allow update: if isAuthenticated() &&
+                       request.auth.uid == resource.data.reviewerId;
+
+      // Reviewers can delete their own; book authors can delete any
+      allow delete: if isAuthenticated() &&
+                       (request.auth.uid == resource.data.reviewerId ||
+                        isBookAuthor(get(/databases/$(database)/documents/chapters/$(resource.data.chapterId)).data.bookId));
     }
+
   }
 }

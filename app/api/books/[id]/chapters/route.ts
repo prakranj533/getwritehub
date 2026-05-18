@@ -13,7 +13,7 @@ export async function GET(
       return NextResponse.json({ error: 'Book not found' }, { status: 404 });
     }
     const bookData = bookDoc.data();
-    if (!bookData?.isPublic && bookData?.status !== 'published') {
+    if (!(bookData?.isPublic === true && bookData?.status === 'published')) {
       const user = await verifyAuth(request);
       if (!user) return unauthorizedResponse();
       const hasAccess = await checkBookAccess(params.id, user.uid, user.email || '');

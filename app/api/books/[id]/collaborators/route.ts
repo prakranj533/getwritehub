@@ -11,7 +11,7 @@ export async function GET(
     const bookDoc = await adminDb.collection('books').doc(params.id).get();
     if (!bookDoc.exists) return NextResponse.json({ error: 'Book not found' }, { status: 404 });
     const bookData = bookDoc.data();
-    if (!bookData?.isPublic && bookData?.status !== 'published') {
+    if (!(bookData?.isPublic === true && bookData?.status === 'published')) {
       const user = await verifyAuth(request);
       if (!user) return unauthorizedResponse();
       const hasAccess = await checkBookAccess(params.id, user.uid, user.email || '');

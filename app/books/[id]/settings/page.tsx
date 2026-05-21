@@ -124,7 +124,7 @@ export default function BookSettings({ params }: { params: { id: string } }) {
           <form onSubmit={saveSettings} className="space-y-10">
             <div className="space-y-4">
               <label className="block text-sm font-black text-gray-400 uppercase tracking-widest px-1">
-                Manuscript Title
+                Title
               </label>
               <input
                 type="text"
@@ -137,7 +137,7 @@ export default function BookSettings({ params }: { params: { id: string } }) {
 
             <div className="space-y-4">
               <label className="block text-sm font-black text-gray-400 uppercase tracking-widest px-1">
-                Plot Summary
+                summary
               </label>
               <textarea
                 value={description}

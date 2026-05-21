@@ -67,12 +67,11 @@ export async function GET(request: Request) {
 
       return NextResponse.json(allBooks);
     } else {
-      // Public books — sort in memory to avoid requiring composite index
+      // Public books - sort in memory to avoid requiring composite index
       const snapshot = await adminDb.collection('books')
         .where('isPublic', '==', true)
-        .where('status', '==', 'published')
         .get();
-      
+
       const books = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),

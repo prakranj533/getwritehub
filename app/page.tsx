@@ -21,25 +21,24 @@ export default function Home() {
   const fetchBooks = useCallback(async () => {
     try {
       setLoading(true);
-      if (!user) {
-        // Only show public books when not logged in
-        if (activeTab === "my-books") {
+      
+      let fetchedBooks: BookType[] = [];
+      const userId = user?.id || "";
+
+      if (activeTab === "my-books") {
+        if (!user) {
           setBooks([]);
           return;
         }
+        fetchedBooks = await getBooks(userId);
+      } else {
+        // Discover tab: always fetch public books regardless of login status
+        fetchedBooks = await getBooks("");
       }
-      
-      const userId = user?.id || "";
-      const allBooks = await getBooks(userId);
-      
-      // Filter based on active tab
-      const filteredBooks = activeTab === "my-books" && user
-        ? allBooks.filter(b => b.authorId === userId || b.authorEmail === user.email)
-        : allBooks.filter(b => b.isPublic || b.status === "published");
       
       // Fetch chapter and collaborator counts for each book
       const booksWithCounts = await Promise.all(
-        filteredBooks.map(async (book) => {
+        fetchedBooks.map(async (book) => {
           const chapters = await getChapters(book.id!);
           const collaborators = await getCollaborators(book.id!);
           return {

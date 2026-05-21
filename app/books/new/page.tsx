@@ -91,7 +91,7 @@ export default function NewBook() {
               <Book className="w-10 h-10 text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-black text-gray-900 tracking-tight">Birth of a Story</h1>
+              <h1 className="text-4xl font-black text-gray-900 tracking-tight">Birth of an Idea</h1>
               <p className="text-gray-500 font-bold uppercase tracking-widest text-xs mt-1">Initialize your new project</p>
             </div>
           </div>
@@ -106,7 +106,7 @@ export default function NewBook() {
           <form onSubmit={handleSubmit} className="space-y-10">
             <div className="space-y-4">
               <label className="block text-sm font-black text-gray-400 uppercase tracking-widest px-1">
-                Manuscript Title
+                Title
               </label>
               <input
                 type="text"
@@ -120,7 +120,7 @@ export default function NewBook() {
 
             <div className="space-y-4">
               <label className="block text-sm font-black text-gray-400 uppercase tracking-widest px-1">
-                Plot Summary
+                summary
               </label>
               <textarea
                 value={description}
